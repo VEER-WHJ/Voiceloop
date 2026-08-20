@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 
+import { analyzeStoredReviews } from "@/lib/analysis/client";
 import { CsvValidationError, parseReviewsCsv } from "@/lib/reviews/csv";
 import {
   fetchReviews,
@@ -23,7 +24,7 @@ import {
 } from "./sample-data";
 
 type View = "dashboard" | "reviews" | "digest" | "upload";
-type UploadStatus = "empty" | "selected" | "loading" | "success" | "error";
+type UploadStatus = "empty" | "selected" | "loading" | "analyzing" | "success" | "analysis-error" | "error";
 type Theme = { name: string; count: number; tone: "positive" | "warning"; description: string };
 
 const navItems: { id: View; label: string }[] = [
@@ -158,12 +159,17 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
   const [rows, setRows] = useState<ReviewInsert[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [uploadedCount, setUploadedCount] = useState(0);
+  const [analyzedCount, setAnalyzedCount] = useState(0);
+  const [insertedReviewIds, setInsertedReviewIds] = useState<string[]>([]);
+  const [analysisError, setAnalysisError] = useState("");
   const [dragging, setDragging] = useState(false);
 
   const clearSelection = () => {
     setFileName("");
     setRows([]);
     setValidationErrors([]);
+    setInsertedReviewIds([]);
+    setAnalysisError("");
     setStatus("empty");
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -211,11 +217,12 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
     setStatus("loading");
     setValidationErrors([]);
 
+    let reviewIds: string[];
     try {
-      const count = await insertReviews(rows);
-      setUploadedCount(count);
-      setStatus("success");
-      window.setTimeout(onComplete, 900);
+      const insertedReviews = await insertReviews(rows);
+      reviewIds = insertedReviews.map(({ id }) => id);
+      setUploadedCount(reviewIds.length);
+      setInsertedReviewIds(reviewIds);
     } catch (error) {
       setValidationErrors([
         error instanceof Error
@@ -223,6 +230,37 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
           : "Supabase could not save the reviews.",
       ]);
       setStatus("error");
+      return;
+    }
+
+    await runAnalysis(reviewIds);
+  };
+
+  const runAnalysis = async (reviewIds: string[]) => {
+    setStatus("analyzing");
+    setAnalysisError("");
+
+    try {
+      const result = await analyzeStoredReviews(reviewIds);
+      setAnalyzedCount(Math.min(reviewIds.length, result.analyzed + result.skipped));
+
+      if (result.failed > 0) {
+        setAnalysisError(
+          `${result.analyzed} reviews were analyzed, but ${result.failed} could not be completed. Your uploaded reviews are still safely stored.`,
+        );
+        setStatus("analysis-error");
+        return;
+      }
+
+      setStatus("success");
+      window.setTimeout(onComplete, 900);
+    } catch (error) {
+      setAnalysisError(
+        error instanceof Error
+          ? `${error.message} Your uploaded reviews are still safely stored.`
+          : "VoiceLoop could not analyze the uploaded reviews. Your uploaded reviews are still safely stored.",
+      );
+      setStatus("analysis-error");
     }
   };
 
@@ -255,13 +293,42 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
     );
   }
 
+  if (status === "analyzing") {
+    return (
+      <StatusPanel
+        tone="blue"
+        eyebrow="AI review analysis"
+        title="Analyzing customer feedback..."
+        copy={`VoiceLoop is assigning a restaurant theme and sentiment to ${uploadedCount} uploaded reviews in controlled batches.`}
+        loading
+      />
+    );
+  }
+
   if (status === "success") {
     return (
       <StatusPanel
         tone="green"
-        eyebrow="Upload complete"
-        title="Your reviews are ready"
-        copy={`${uploadedCount} reviews were saved successfully. Opening Review Explorer now.`}
+        eyebrow="Upload and analysis complete"
+        title="Your analyzed reviews are ready"
+        copy={`${uploadedCount} reviews were saved and ${analyzedCount} have theme and sentiment results. Opening Review Explorer now.`}
+      />
+    );
+  }
+
+  if (status === "analysis-error") {
+    return (
+      <StatusPanel
+        tone="red"
+        eyebrow="Analysis needs attention"
+        title="Your reviews are safe"
+        copy={analysisError}
+        action={
+          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+            <button className={buttonPrimary} onClick={() => void runAnalysis(insertedReviewIds)}>Try analysis again</button>
+            <button className={buttonSecondary} onClick={onComplete}>Open Review Explorer</button>
+          </div>
+        }
       />
     );
   }
@@ -275,8 +342,9 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
     </section><p className="mt-5 text-center text-sm text-slate-600">Need a file to test? <button className="font-bold text-blue-700 underline underline-offset-4" onClick={() => void loadSampleCsv()}>Use sample CSV</button></p></div>;
 }
 
-function StatusPanel({ eyebrow, title, copy, loading = false, tone }: { eyebrow: string; title: string; copy: string; loading?: boolean; tone: "blue" | "green" }) {
-  return <div className="grid min-h-[68vh] place-items-center fade-in"><section className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"><p className={`text-xs font-bold uppercase tracking-[0.14em] ${tone === "green" ? "text-teal-700" : "text-blue-800"}`}>{eyebrow}</p><h1 className="mt-3 text-3xl font-bold">{title}</h1><p className="mx-auto mt-3 max-w-lg leading-7 text-slate-600">{copy}</p>{loading && <div className="mx-auto mt-8 h-2 max-w-md overflow-hidden rounded-full bg-slate-100"><div className="progress-shimmer h-full w-1/3 rounded-full bg-blue-700" /></div>}</section></div>;
+function StatusPanel({ eyebrow, title, copy, loading = false, tone, action }: { eyebrow: string; title: string; copy: string; loading?: boolean; tone: "blue" | "green" | "red"; action?: React.ReactNode }) {
+  const eyebrowTone = tone === "green" ? "text-teal-700" : tone === "red" ? "text-red-700" : "text-blue-800";
+  return <div className="grid min-h-[68vh] place-items-center fade-in"><section className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-12"><p className={`text-xs font-bold uppercase tracking-[0.14em] ${eyebrowTone}`}>{eyebrow}</p><h1 className="mt-3 text-3xl font-bold">{title}</h1><p className="mx-auto mt-3 max-w-lg leading-7 text-slate-600">{copy}</p>{loading && <div className="mx-auto mt-8 h-2 max-w-md overflow-hidden rounded-full bg-slate-100"><div className="progress-shimmer h-full w-1/3 rounded-full bg-blue-700" /></div>}{action}</section></div>;
 }
 
 function ReviewExplorer({ revision }: { revision: number }) {

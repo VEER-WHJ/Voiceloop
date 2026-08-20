@@ -28,7 +28,7 @@ export async function insertReviews(rows: ReviewInsert[]) {
     .select("id");
 
   if (error) throw error;
-  return data.length;
+  return data;
 }
 
 export async function fetchReviews({
