@@ -1,5 +1,44 @@
 @import "tailwindcss";
 
+:root {
+  --brand-ink: #16324f;
+  --primary: #1d4ed8;
+  --primary-dark: #1e40af;
+  --positive: #0f766e;
+  --positive-bg: #f0fdfa;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --violet: #7c3aed;
+  --violet-bg: #f5f3ff;
+  --canvas: #f8fafc;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+::selection { background: #dbeafe; color: var(--brand-ink); }
+
+.drawer-enter { animation: drawer-enter 180ms ease-out; }
+.fade-in { animation: fade-in 180ms ease-out; }
+.progress-shimmer { animation: progress 1.2s ease-in-out infinite; }
+@keyframes drawer-enter { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes progress { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }

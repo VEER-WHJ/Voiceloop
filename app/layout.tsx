@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VoiceLoop",
-  description: "VoiceLoop starter",
+  title: "VoiceLoop — Customer feedback intelligence",
+  description: "Turn restaurant reviews into clear themes, evidence, and priorities.",
 };
 
 export default function RootLayout({

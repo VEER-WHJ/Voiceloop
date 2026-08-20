@@ -11,12 +11,14 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
     "next": "latest",
+    "papaparse": "^5.6.0",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "latest",
     "@types/node": "latest",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
