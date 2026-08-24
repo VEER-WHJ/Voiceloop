@@ -30,7 +30,7 @@ test("parses valid reviews and leaves analysis fields null", () => {
 
 test("rejects a CSV without review_text", () => {
   assert.throws(
-    () => parseReviewsCsv("review,rating\nGreat meal,5"),
+    () => parseReviewsCsv("feedback_note,rating\nGreat meal,5"),
     (error) =>
       error instanceof CsvValidationError &&
       error.issues.some((issue) => issue.includes('"review_text"')),
@@ -66,4 +66,20 @@ test("rejects invalid optional values before insertion", () => {
       error.issues.some((issue) => issue.includes("rating must")) &&
       error.issues.some((issue) => issue.includes("YYYY-MM-DD")),
   );
+});
+
+test("accepts common export column aliases without manual reformatting", () => {
+  const rows = parseReviewsCsv(
+    [
+      "Comment,Stars,Date,Platform,Author",
+      '"Excellent burger and quick service",5,2026-08-22,Google,Jordan',
+    ].join("\n"),
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].review_text, "Excellent burger and quick service");
+  assert.equal(rows[0].rating, 5);
+  assert.equal(rows[0].review_date, "2026-08-22");
+  assert.equal(rows[0].source, "Google");
+  assert.equal(rows[0].reviewer_name, "Jordan");
 });

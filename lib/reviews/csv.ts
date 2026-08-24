@@ -10,6 +10,33 @@ type CsvRow = Record<string, string | undefined> & {
   __parsed_extra?: string[];
 };
 
+const HEADER_ALIASES: Record<string, string> = {
+  review: "review_text",
+  text: "review_text",
+  comment: "review_text",
+  comments: "review_text",
+  review_body: "review_text",
+  review_content: "review_text",
+  stars: "rating",
+  star_rating: "rating",
+  score: "rating",
+  date: "review_date",
+  reviewed_at: "review_date",
+  platform: "source",
+  channel: "source",
+  author: "reviewer_name",
+  customer_name: "reviewer_name",
+};
+
+function normalizeHeader(header: string) {
+  const normalized = header
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+  return HEADER_ALIASES[normalized] ?? normalized;
+}
+
 export class CsvValidationError extends Error {
   readonly issues: string[];
 
@@ -69,7 +96,7 @@ export function parseReviewsCsv(csvText: string): ReviewInsert[] {
   const result = Papa.parse<CsvRow>(csvText, {
     header: true,
     skipEmptyLines: "greedy",
-    transformHeader: (header) => header.trim().toLowerCase(),
+    transformHeader: normalizeHeader,
   });
 
   const headers = result.meta.fields ?? [];

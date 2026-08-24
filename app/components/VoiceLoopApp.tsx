@@ -1,7 +1,30 @@
 "use client";
 
-import Image from "next/image";
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowRight,
+  Bell,
+  Buildings,
+  ChartBar,
+  CheckCircle,
+  ClipboardText,
+  CloudArrowUp,
+  GearSix,
+  GoogleLogo,
+  House,
+  ListMagnifyingGlass,
+  MapPin,
+  Plus,
+  PlugsConnected,
+  ShieldCheck,
+  SignOut,
+  Sparkle,
+  Storefront,
+  UploadSimple,
+  WarningCircle,
+  X,
+} from "@phosphor-icons/react";
 
 import { analyzeStoredReviews } from "@/lib/analysis/client";
 import { CsvValidationError, parseReviewsCsv } from "@/lib/reviews/csv";
@@ -16,6 +39,19 @@ import type {
   ReviewInsert,
   ReviewRecord,
 } from "@/lib/supabase/database.types";
+import {
+  createLocation,
+  createManagerAction,
+  fetchImports,
+  fetchLocations,
+  fetchManagerActions,
+  undoImport,
+  updateLocation,
+  updateManagerAction,
+  type ImportBatch,
+  type ManagerAction,
+  type WorkspaceLocation,
+} from "@/lib/workspace/repository";
 
 import {
   frictionThemes,
@@ -23,25 +59,38 @@ import {
   reviews as sampleReviews,
 } from "./sample-data";
 
-type View = "dashboard" | "reviews" | "digest" | "upload";
+type View = "dashboard" | "reviews" | "sources" | "upload" | "digest" | "settings";
+type LocationId = "all" | "downtown" | "riverside" | "northgate" | "airport";
 type UploadStatus = "empty" | "selected" | "loading" | "analyzing" | "success" | "analysis-error" | "error";
 type Theme = { name: string; count: number; tone: "positive" | "warning"; description: string };
 
-const navItems: { id: View; label: string }[] = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "reviews", label: "Review Explorer" },
-  { id: "digest", label: "AI Digest" },
-  { id: "upload", label: "Upload CSV" },
+const navItems: { id: View; label: string; icon: typeof House }[] = [
+  { id: "dashboard", label: "Overview", icon: House },
+  { id: "reviews", label: "Reviews", icon: ListMagnifyingGlass },
+  { id: "sources", label: "Sources", icon: PlugsConnected },
+  { id: "upload", label: "Uploads", icon: UploadSimple },
+  { id: "digest", label: "AI digest", icon: Sparkle },
+  { id: "settings", label: "Settings", icon: GearSix },
 ];
 
-const buttonPrimary = "inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-700 bg-blue-700 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:border-blue-800 hover:bg-blue-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300";
-const buttonSecondary = "inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-600 hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-50";
+const locations: { id: LocationId; name: string; shortName: string }[] = [
+  { id: "all", name: "All locations", shortName: "All" },
+  { id: "downtown", name: "Downtown", shortName: "Downtown" },
+  { id: "riverside", name: "Riverside", shortName: "Riverside" },
+  { id: "northgate", name: "Northgate", shortName: "Northgate" },
+  { id: "airport", name: "Airport", shortName: "Airport" },
+];
+
+const buttonPrimary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#b91c1c] bg-[#c81e1e] px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_3px_0_#861616] transition hover:-translate-y-0.5 hover:bg-[#ad1818] disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-300 disabled:shadow-none";
+const buttonSecondary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border-2 border-stone-300 bg-white px-4 py-2.5 text-sm font-extrabold text-stone-800 shadow-[0_2px_0_rgba(28,25,23,0.08)] transition hover:border-stone-500 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50";
+const panelClass = "rounded-[18px] border-2 border-stone-300 bg-white shadow-[0_5px_0_rgba(41,37,36,0.08)]";
 
 export function VoiceLoopApp() {
   const [view, setView] = useState<View>("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
   const [drawerTheme, setDrawerTheme] = useState<Theme | null>(null);
   const [reviewsRevision, setReviewsRevision] = useState(0);
+  const [location, setLocation] = useState<LocationId>("all");
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -61,12 +110,20 @@ export function VoiceLoopApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
-      <a href="#main-content" className="fixed left-3 top-3 z-[90] -translate-y-24 rounded-lg bg-slate-950 px-4 py-3 font-bold text-white focus:translate-y-0">Skip to main content</a>
-      <Header view={view} open={menuOpen} onToggle={() => setMenuOpen((value) => !value)} onNavigate={navigate} />
-      <main id="main-content" className="mx-auto w-[min(calc(100%-2rem),1180px)] max-w-[1180px] px-4 py-8 sm:px-6 sm:py-10 lg:px-0 lg:py-12">
-        {view === "dashboard" && <Dashboard onNavigate={navigate} onOpenTheme={setDrawerTheme} />}
+    <div className="min-h-screen bg-[#f6f1e8] text-stone-950">
+      <a href="#main-content" className="fixed left-3 top-3 z-[90] -translate-y-24 rounded-lg bg-stone-950 px-4 py-3 font-bold text-white focus:translate-y-0">Skip to main content</a>
+      <Sidebar view={view} open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />
+      <MobileHeader
+        onHome={() => navigate("dashboard")}
+        onToggle={() => setMenuOpen((value) => !value)}
+      />
+      <main id="main-content" className="min-h-screen px-4 pb-12 pt-6 sm:px-6 lg:ml-[236px] lg:px-10 lg:pb-16 lg:pt-8 xl:px-14">
+        <div className="mx-auto max-w-[1240px]">
+          <WorkspaceHeader view={view} location={location} onLocationChange={setLocation} onNavigate={navigate} />
+        <DemoModeBanner />
+        {view === "dashboard" && <Dashboard location={location} onNavigate={navigate} onOpenTheme={setDrawerTheme} />}
         {view === "reviews" && <ReviewExplorer revision={reviewsRevision} />}
+        {view === "sources" && <SourcesScreen onNavigate={navigate} />}
         {view === "digest" && <AIDigest onOpenTheme={setDrawerTheme} />}
         {view === "upload" && (
           <UploadScreen
@@ -76,29 +133,82 @@ export function VoiceLoopApp() {
             }}
           />
         )}
+        {view === "settings" && <SettingsScreen />}
+        </div>
       </main>
       {drawerTheme && <EvidenceDrawer theme={drawerTheme} onClose={() => setDrawerTheme(null)} />}
     </div>
   );
 }
 
-function Header({ view, open, onToggle, onNavigate }: { view: View; open: boolean; onToggle: () => void; onNavigate: (view: View) => void }) {
+function SecretBurgerMark({ onHome, compact = false }: { onHome: () => void; compact?: boolean }) {
   return (
-    <header className="sticky top-0 z-50 h-16 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
-      <div className="relative mx-auto flex h-full max-w-[1180px] items-center justify-between px-4 sm:px-6 lg:px-0">
-        <button onClick={() => onNavigate("dashboard")} aria-label="VoiceLoop home" className="rounded-md bg-white">
-          <Image src="/voiceloop-logo.png" alt="VoiceLoop" width={170} height={46} className="h-11 w-40 object-contain" priority />
-        </button>
-        <button type="button" className={buttonSecondary} onClick={onToggle} aria-expanded={open} aria-controls="main-menu">Menu</button>
-        {open && (
-          <nav id="main-menu" aria-label="VoiceLoop areas" className="absolute right-4 top-[calc(100%+0.5rem)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl sm:right-6 lg:right-0">
-            {navItems.map((item) => (
-              <button key={item.id} onClick={() => onNavigate(item.id)} aria-current={view === item.id ? "page" : undefined} className={`block min-h-11 w-full rounded-lg px-4 text-left text-sm font-semibold transition ${view === item.id ? "bg-blue-50 text-blue-800" : "text-slate-700 hover:bg-slate-50"}`}>{item.label}</button>
-            ))}
-          </nav>
-        )}
+    <button
+      type="button"
+      className="brand-mark rounded-lg text-left leading-none outline-none transition hover:opacity-75 focus-visible:ring-2 focus-visible:ring-[#c81e1e] focus-visible:ring-offset-4"
+      onClick={onHome}
+      aria-label="Go to the Secret Burger overview"
+    >
+      <p className={`${compact ? "text-[10px]" : "text-[12px]"} font-black uppercase tracking-[0.34em] text-[#c81e1e]`}>Secret</p>
+      <p className={`${compact ? "mt-0.5 text-[21px]" : "mt-1 text-[25px]"} font-black uppercase tracking-[-0.055em] text-stone-950`}>Burger</p>
+      <p className={`${compact ? "mt-1 text-[7px]" : "mt-2 text-[9px]"} font-bold uppercase tracking-[0.16em] text-stone-500`}>powered by VoiceLoop</p>
+    </button>
+  );
+}
+
+function Sidebar({ view, open, onClose, onNavigate }: { view: View; open: boolean; onClose: () => void; onNavigate: (view: View) => void }) {
+  const router = useRouter();
+
+  const signOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  };
+
+  return (
+    <>
+      {open && <button aria-label="Close navigation" className="fixed inset-0 z-50 bg-stone-950/35 lg:hidden" onClick={onClose} />}
+      <aside className={`fixed inset-y-0 left-0 z-[60] flex w-[236px] flex-col border-r-2 border-stone-300 bg-[#fffaf1] px-4 py-6 shadow-[6px_0_20px_rgba(41,37,36,0.06)] transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex items-start justify-between px-3"><SecretBurgerMark onHome={() => onNavigate("dashboard")} /><button className="grid h-11 w-11 place-items-center rounded-lg text-stone-600 hover:bg-stone-100 lg:hidden" onClick={onClose} aria-label="Close menu"><X size={20} weight="bold" /></button></div>
+        <nav id="main-menu" aria-label="Secret Burger workspace" className="mt-10 space-y-1.5">
+          {navItems.map((item) => { const Icon = item.icon; return (
+            <button key={item.id} onClick={() => onNavigate(item.id)} aria-current={view === item.id ? "page" : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm font-extrabold transition ${view === item.id ? "bg-[#c81e1e] text-white shadow-[0_3px_0_#861616]" : "text-stone-700 hover:bg-stone-200/60 hover:text-stone-950"}`}><Icon size={19} weight={view === item.id ? "fill" : "bold"} />{item.label}</button>
+          ); })}
+        </nav>
+        <div className="mt-auto rounded-xl border-2 border-stone-300 bg-white p-3.5 shadow-[0_3px_0_rgba(41,37,36,0.07)]">
+          <div className="flex items-center gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-900 text-xs font-black text-white">SB</div><div className="min-w-0"><p className="truncate text-sm font-extrabold">Private pilot</p><p className="truncate text-xs text-stone-500">Manager workspace</p></div><button type="button" onClick={() => void signOut()} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-950" aria-label="Sign out"><SignOut size={18} weight="bold" /></button></div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function MobileHeader({ onHome, onToggle }: { onHome: () => void; onToggle: () => void }) {
+  return <header className="sticky top-0 z-40 flex h-[74px] items-center justify-between border-b-2 border-stone-300 bg-[#fffaf1]/95 px-4 backdrop-blur lg:hidden"><SecretBurgerMark compact onHome={onHome} /><button type="button" className={buttonSecondary} onClick={onToggle} aria-controls="main-menu"><ListMagnifyingGlass size={18} weight="bold" />Menu</button></header>;
+}
+
+function WorkspaceHeader({ view, location, onLocationChange, onNavigate }: { view: View; location: LocationId; onLocationChange: (location: LocationId) => void; onNavigate: (view: View) => void }) {
+  const pageTitle = navItems.find((item) => item.id === view)?.label ?? "Overview";
+  return (
+    <header className="mb-8">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div><p className="text-sm font-extrabold uppercase tracking-[0.12em] text-[#b91c1c]">{pageTitle}</p><h1 className="mt-1 text-[2rem] font-black tracking-[-0.04em] text-stone-950 sm:text-[2.7rem]">Guest feedback at a glance</h1><p className="mt-1 text-sm font-medium text-stone-500">Secret Burger pilot workspace · See what deserves attention first.</p></div>
+        <div className="flex items-center gap-2"><button className="relative grid h-11 w-11 place-items-center rounded-xl border-2 border-stone-300 bg-white shadow-[0_2px_0_rgba(41,37,36,0.08)]" aria-label="Notifications"><Bell size={20} weight="bold" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#c81e1e]" /></button><button className={buttonPrimary} onClick={() => onNavigate("upload")}><UploadSimple size={18} weight="bold" />Add reviews</button></div>
       </div>
+      {view === "dashboard" && <div className="mt-7 flex items-center gap-2 overflow-x-auto pb-1" aria-label="Choose a location">
+        {locations.map((item) => <button key={item.id} onClick={() => onLocationChange(item.id)} aria-pressed={location === item.id} className={`min-h-11 shrink-0 rounded-full border-2 px-4 text-sm font-extrabold transition ${location === item.id ? "border-stone-950 bg-stone-950 text-white" : "border-stone-300 bg-white text-stone-700 hover:border-stone-500"}`}>{item.name}</button>)}
+        <button className="ml-auto inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border-2 border-stone-300 bg-transparent px-4 text-sm font-extrabold text-stone-700 hover:bg-white"><Buildings size={17} weight="bold" />Compare locations</button>
+      </div>}
     </header>
+  );
+}
+
+function DemoModeBanner() {
+  return (
+    <div className="mb-7 flex flex-col gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-[0_3px_0_rgba(146,64,14,0.08)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 shrink-0 text-amber-700" size={20} weight="fill" /><p><strong>Private demo workspace.</strong> Location names and overview metrics are sample data. Uploaded review files are stored separately in the secured pilot database.</p></div>
+      <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-amber-800">Google not connected</span>
+    </div>
   );
 }
 
@@ -106,50 +216,255 @@ function PageHeading({ eyebrow, title, copy, action }: { eyebrow: string; title:
   return (
     <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-blue-800">{eyebrow}</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-[-0.025em] text-slate-950 sm:text-4xl">{title}</h1>
-        <p className="mt-2 text-base leading-7 text-slate-600 sm:text-lg">{copy}</p>
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">{eyebrow}</p>
+        <h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-stone-950 sm:text-[2.5rem]">{title}</h1>
+        <p className="mt-2 text-base leading-7 text-stone-600 sm:text-lg">{copy}</p>
       </div>
       {action}
     </header>
   );
 }
 
-function Dashboard({ onNavigate, onOpenTheme }: { onNavigate: (view: View) => void; onOpenTheme: (theme: Theme) => void }) {
+const locationPerformance = [
+  { id: "downtown", name: "Downtown", score: 4.7, reviews: 148, trend: "+0.2", issue: "Order accuracy", tone: "text-emerald-700" },
+  { id: "riverside", name: "Riverside", score: 3.9, reviews: 126, trend: "-0.4", issue: "Wait time", tone: "text-[#b91c1c]" },
+  { id: "northgate", name: "Northgate", score: 4.5, reviews: 94, trend: "+0.1", issue: "Food temperature", tone: "text-emerald-700" },
+  { id: "airport", name: "Airport", score: 4.2, reviews: 88, trend: "0.0", issue: "Value", tone: "text-stone-600" },
+];
+
+function GuidedStart({ onNavigate, onOpenTheme }: { onNavigate: (view: View) => void; onOpenTheme: (theme: Theme) => void }) {
+  const visible = useSyncExternalStore(
+    (notify) => {
+      window.addEventListener("storage", notify);
+      window.addEventListener("voiceloop-tour-change", notify);
+      return () => {
+        window.removeEventListener("storage", notify);
+        window.removeEventListener("voiceloop-tour-change", notify);
+      };
+    },
+    () => window.localStorage.getItem("voiceloop_tour_dismissed") !== "true",
+    () => false,
+  );
+
+  if (!visible) return null;
+  const dismiss = () => {
+    window.localStorage.setItem("voiceloop_tour_dismissed", "true");
+    window.dispatchEvent(new Event("voiceloop-tour-change"));
+  };
+
+  return (
+    <section className={`${panelClass} overflow-hidden bg-[#fffaf1]`} aria-label="VoiceLoop quick start">
+      <div className="flex items-start justify-between gap-4 border-b-2 border-stone-300 px-5 py-4 sm:px-7"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Two-minute walkthrough</p><h2 className="mt-1 text-2xl font-black">See the manager workflow</h2></div><button type="button" className="rounded-lg p-2 text-stone-500 hover:bg-stone-100" onClick={dismiss} aria-label="Dismiss walkthrough"><X size={20} weight="bold" /></button></div>
+      <div className="grid divide-y-2 divide-stone-200 md:grid-cols-3 md:divide-x-2 md:divide-y-0">
+        <button className="group p-5 text-left sm:p-6" onClick={() => onOpenTheme(frictionThemes[0])}><span className="grid h-8 w-8 place-items-center rounded-full bg-stone-950 text-sm font-black text-white">1</span><h3 className="mt-4 font-extrabold group-hover:text-[#b91c1c]">Inspect an issue</h3><p className="mt-1 text-sm leading-6 text-stone-600">Open the supporting customer quotes behind an alert.</p></button>
+        <button className="group p-5 text-left sm:p-6" onClick={() => onNavigate("reviews")}><span className="grid h-8 w-8 place-items-center rounded-full bg-stone-950 text-sm font-black text-white">2</span><h3 className="mt-4 font-extrabold group-hover:text-[#b91c1c]">Explore reviews</h3><p className="mt-1 text-sm leading-6 text-stone-600">Search and filter the evidence across sources.</p></button>
+        <button className="group p-5 text-left sm:p-6" onClick={() => onNavigate("upload")}><span className="grid h-8 w-8 place-items-center rounded-full bg-stone-950 text-sm font-black text-white">3</span><h3 className="mt-4 font-extrabold group-hover:text-[#b91c1c]">Try an import</h3><p className="mt-1 text-sm leading-6 text-stone-600">Upload a CSV and let VoiceLoop analyze it safely.</p></button>
+      </div>
+    </section>
+  );
+}
+
+function ManagerActionQueue() {
+  const [actions, setActions] = useState<ManagerAction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchManagerActions()
+      .then((items) => {
+        if (cancelled) return;
+        setActions(items);
+        setError("");
+      })
+      .catch(() => {
+        if (!cancelled) setError("Manager actions are temporarily unavailable.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const addPriorityAction = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const action = await createManagerAction({
+        title: "Investigate Riverside dinner wait times",
+        description: "Review the eleven supporting comments and compare staffing during the 6–8 PM dinner window.",
+        locationName: "Riverside",
+        priority: "high",
+      });
+      setActions((current) => [action, ...current]);
+    } catch {
+      setError("VoiceLoop could not create the action. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changeStatus = async (action: ManagerAction, status: ManagerAction["status"]) => {
+    setSaving(true);
+    try {
+      const updated = await updateManagerAction(action.id, { status });
+      setActions((current) => current.map((item) => item.id === action.id ? updated : item));
+      setError("");
+    } catch {
+      setError("VoiceLoop could not update that action.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className={`${panelClass} mt-6 overflow-hidden`}>
+      <div className="flex flex-col gap-4 border-b-2 border-stone-300 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Manager actions</p><h2 className="mt-1 text-2xl font-black tracking-[-0.025em]">Turn evidence into follow-through</h2><p className="mt-1 text-sm text-stone-500">A lightweight queue for the issues worth investigating.</p></div><button className={buttonSecondary} disabled={saving || actions.some((item) => item.title.startsWith("Investigate Riverside"))} onClick={() => void addPriorityAction()}><Plus size={17} weight="bold" />Create priority action</button></div>
+      {error && <p role="alert" className="border-b-2 border-red-200 bg-red-50 px-6 py-3 text-sm font-bold text-red-900">{error}</p>}
+      {loading ? <p className="p-7 text-sm text-stone-500">Loading manager actions…</p> : actions.length ? <div className="divide-y-2 divide-stone-200">{actions.slice(0, 5).map((action) => <article key={action.id} className="grid gap-4 bg-white p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-7"><div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] ${action.priority === "high" ? "bg-red-50 text-red-800" : "bg-stone-100 text-stone-600"}`}>{action.priority}</span>{action.location_name && <span className="text-xs font-bold text-stone-500">{action.location_name}</span>}</div><h3 className="mt-2 font-extrabold">{action.title}</h3>{action.description && <p className="mt-1 max-w-3xl text-sm leading-6 text-stone-600">{action.description}</p>}</div><select aria-label={`Status for ${action.title}`} value={action.status} disabled={saving} onChange={(event) => void changeStatus(action, event.target.value as ManagerAction["status"])} className="h-11 rounded-lg border-2 border-stone-300 bg-white px-3 text-sm font-extrabold capitalize"><option value="open">Open</option><option value="monitoring">Monitoring</option><option value="resolved">Resolved</option></select></article>)}</div> : <div className="p-7 text-center"><ClipboardText className="mx-auto text-stone-400" size={34} weight="bold" /><h3 className="mt-3 text-lg font-extrabold">No actions yet</h3><p className="mt-1 text-sm text-stone-500">Create the highlighted Riverside investigation to demonstrate the workflow.</p></div>}
+    </section>
+  );
+}
+
+function Dashboard({ location, onNavigate, onOpenTheme }: { location: LocationId; onNavigate: (view: View) => void; onOpenTheme: (theme: Theme) => void }) {
+  const selected = locations.find((item) => item.id === location)?.name ?? "All locations";
   return (
     <div className="fade-in">
-      <PageHeading eyebrow="Customer feedback overview" title="VoiceLoop dashboard" copy="24 customer reviews analyzed" action={<button className={buttonPrimary} onClick={() => onNavigate("upload")}>Upload new reviews</button>} />
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Feedback summary metrics">
-        <MetricCard label="Reviews analyzed" value="24" detail="Current CSV dataset" />
-        <MetricCard label="Positive sentiment" value="50%" detail="12 positive reviews" />
-        <MetricCard label="Top praise" value="Food quality" detail="6 mentions" compact />
-        <MetricCard label="Top complaint" value="Slow service and wait times" detail="6 mentions" compact />
+      <GuidedStart onNavigate={onNavigate} onOpenTheme={onOpenTheme} />
+      <section className={`${panelClass} mt-6 overflow-hidden`}>
+        <div className="border-b-2 border-stone-300 bg-[#fff8e7] px-5 py-4 sm:px-7"><div className="flex items-center gap-2 text-[#b91c1c]"><WarningCircle size={20} weight="fill" /><p className="text-xs font-black uppercase tracking-[0.14em]">Needs attention today</p></div></div>
+        <div className="grid lg:grid-cols-[1.25fr_0.75fr]">
+          <div className="p-5 sm:p-8 lg:border-r-2 lg:border-stone-300"><p className="text-sm font-extrabold text-stone-500">Riverside · Service speed</p><h2 className="mt-2 max-w-2xl text-[2rem] font-black leading-[1.08] tracking-[-0.04em] sm:text-[2.45rem]">Slow service is driving this week’s negative reviews.</h2><p className="mt-4 max-w-2xl text-base leading-7 text-stone-600">Eleven guests mentioned long waits after ordering—more than double Riverside’s usual volume. Dinner service between 6–8 PM is the clearest cluster.</p><div className="mt-6 flex flex-col gap-3 sm:flex-row"><button className={buttonPrimary} onClick={() => onOpenTheme(frictionThemes[0])}>Review evidence <ArrowRight size={18} weight="bold" /></button><button className={buttonSecondary} onClick={() => { onNavigate("reviews"); }}>View Riverside dashboard</button></div></div>
+          <div className="grid grid-cols-2 gap-px bg-stone-300 lg:grid-cols-1">
+            <div className="bg-white p-5 sm:p-7"><p className="text-xs font-black uppercase tracking-[0.1em] text-stone-500">Mentions</p><p className="mt-2 text-4xl font-black tracking-tight">11</p><p className="mt-1 text-sm font-bold text-[#b91c1c]">+7 vs usual</p></div>
+            <div className="bg-white p-5 sm:p-7"><p className="text-xs font-black uppercase tracking-[0.1em] text-stone-500">Average rating</p><p className="mt-2 text-4xl font-black tracking-tight">2.3</p><p className="mt-1 text-sm text-stone-500">for affected reviews</p></div>
+          </div>
+        </div>
       </section>
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <SentimentChart onExplore={() => onNavigate("reviews")} />
-        <ThemeChart onOpen={() => onNavigate("digest")} />
-      </div>
-      <section className="mt-6 rounded-xl border border-violet-200 bg-violet-50 p-5 shadow-sm sm:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-violet-700">AI-generated summary</p><h2 className="mt-2 text-2xl font-bold">Feedback snapshot</h2></div><button className={buttonSecondary} onClick={() => onNavigate("digest")}>Open full digest</button></div>
-        <p className="mt-5 max-w-5xl text-base leading-8 text-slate-700">Customers most often praised food quality. The most frequent recurring complaint was slow service and wait times, mentioned in 6 reviews. Check the supporting quotes before deciding what to investigate.</p>
+
+      <section className={`${panelClass} mt-6 overflow-hidden`}>
+        <div className="flex flex-col gap-4 border-b-2 border-stone-300 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Chain health</p><h2 className="mt-1 text-2xl font-black tracking-[-0.025em] sm:text-3xl">{selected} performance</h2><p className="mt-1 text-sm text-stone-500">Last 30 days · 456 reviews across 7 sources</p></div><button className={buttonSecondary} onClick={() => onNavigate("reviews")}>View reviews <ArrowRight size={17} weight="bold" /></button></div>
+        <div className="grid grid-cols-2 divide-x-2 divide-y-2 divide-stone-300 md:grid-cols-4 md:divide-y-0">
+          <MetricCard label="Average rating" value="4.3" detail="+0.1 from last month" tone="positive" />
+          <MetricCard label="Positive sentiment" value="72%" detail="328 happy guests" tone="positive" />
+          <MetricCard label="Response needed" value="18" detail="Unanswered low ratings" tone="warning" />
+          <MetricCard label="Top praise" value="Food quality" detail="184 mentions" compact />
+        </div>
+        <div className="overflow-x-auto border-t-2 border-stone-300"><table className="w-full min-w-[720px] text-left"><thead className="bg-stone-100 text-xs uppercase tracking-[0.08em] text-stone-500"><tr><th className="px-6 py-4">Location</th><th className="px-6 py-4">Rating</th><th className="px-6 py-4">Reviews</th><th className="px-6 py-4">30-day trend</th><th className="px-6 py-4">Top issue</th></tr></thead><tbody className="divide-y-2 divide-stone-200">{locationPerformance.filter((row) => location === "all" || row.id === location).map((row) => <tr key={row.id} className="bg-white hover:bg-[#fffaf1]"><td className="px-6 py-4 font-extrabold"><span className="inline-flex items-center gap-2"><MapPin size={17} weight="fill" className="text-[#c81e1e]" />{row.name}</span></td><td className="px-6 py-4 font-black">{row.score}</td><td className="px-6 py-4 text-stone-600">{row.reviews}</td><td className={`px-6 py-4 font-extrabold ${row.tone}`}>{row.trend}</td><td className="px-6 py-4 text-stone-600">{row.issue}</td></tr>)}</tbody></table></div>
+        <div className="flex justify-end border-t-2 border-stone-300 bg-stone-50 px-5 py-4"><button className={buttonSecondary}>View all locations <ArrowRight size={17} weight="bold" /></button></div>
       </section>
-      <section className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-5 sm:p-6"><p className="text-xs font-bold uppercase tracking-[0.12em] text-amber-800">Investigate first</p><div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-bold">Slow service and wait times</h2><p className="mt-2 text-sm leading-6 text-slate-700">Highest complaint mention count, concentrated around ordering and check delivery.</p></div><button className={buttonSecondary} onClick={() => onOpenTheme(frictionThemes[0])}>Review 6 quotes</button></div></section>
+
+      <ManagerActionQueue />
+      <SourceFreshness onNavigate={onNavigate} />
     </div>
   );
 }
 
-function MetricCard({ label, value, detail, compact = false }: { label: string; value: string; detail: string; compact?: boolean }) {
-  return <article className="min-h-44 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm font-bold text-slate-600">{label}</p><p className={`mt-4 font-bold leading-tight text-slate-950 ${compact ? "text-xl" : "text-3xl"}`}>{value}</p><p className="mt-3 text-sm text-slate-500">{detail}</p></article>;
+function MetricCard({ label, value, detail, compact = false, tone }: { label: string; value: string; detail: string; compact?: boolean; tone?: "positive" | "warning" }) {
+  return <article className="min-h-40 bg-white p-5 sm:p-6"><p className="text-xs font-black uppercase tracking-[0.08em] text-stone-500">{label}</p><p className={`mt-4 font-black leading-tight tracking-[-0.03em] text-stone-950 ${compact ? "text-[1.35rem]" : "text-3xl"}`}>{value}</p><p className={`mt-3 text-sm font-semibold ${tone === "positive" ? "text-emerald-700" : tone === "warning" ? "text-[#b91c1c]" : "text-stone-500"}`}>{detail}</p></article>;
 }
 
-function SentimentChart({ onExplore }: { onExplore: () => void }) {
-  const rows = [{ label: "Positive", count: 12, percent: 50, color: "bg-teal-600" }, { label: "Neutral", count: 0, percent: 0, color: "bg-slate-500" }, { label: "Negative", count: 12, percent: 50, color: "bg-amber-600" }];
-  return <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-800">Sentiment</p><h2 className="mt-2 text-2xl font-bold">Review mix</h2></div><button className="text-sm font-bold text-blue-700 hover:text-blue-900" onClick={onExplore}>Explore reviews</button></div><div className="mt-7 space-y-6">{rows.map((row) => <div key={row.label}><div className="mb-2 flex justify-between text-sm"><span className="font-bold">{row.label}</span><span className="text-slate-500">{row.count} · {row.percent}%</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${row.color}`} style={{ width: `${row.percent}%` }} /></div></div>)}</div></section>;
+function SourceFreshness({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const sources = [
+    { name: "Google", status: "Manager approval required", icon: GoogleLogo, color: "text-blue-600" },
+    { name: "DoorDash", status: "CSV pilot", icon: Storefront, color: "text-[#c81e1e]" },
+    { name: "Uber Eats", status: "CSV pilot", icon: Storefront, color: "text-emerald-700" },
+    { name: "Yelp", status: "CSV pilot", icon: Sparkle, color: "text-[#c81e1e]" },
+    { name: "Grubhub", status: "CSV pilot", icon: UploadSimple, color: "text-orange-700" },
+  ];
+  return <section className={`${panelClass} mt-6 overflow-hidden`}><div className="flex flex-col gap-3 border-b-2 border-stone-300 p-5 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Source freshness</p><h2 className="mt-1 text-2xl font-black tracking-[-0.025em]">Reviews stay in one place</h2></div><button className={buttonSecondary} onClick={() => onNavigate("sources")}>Manage sources <ArrowRight size={17} weight="bold" /></button></div><div className="grid sm:grid-cols-2 xl:grid-cols-5">{sources.map((source, index) => { const Icon = source.icon; return <div key={source.name} className={`p-5 ${index ? "border-t-2 border-stone-200 sm:border-l-2 xl:border-t-0" : ""}`}><div className="flex items-center gap-3"><div className={`grid h-10 w-10 place-items-center rounded-xl bg-stone-100 ${source.color}`}><Icon size={21} weight="bold" /></div><div><p className="font-extrabold">{source.name}</p><p className="mt-0.5 text-xs text-stone-500">{source.status}</p></div></div></div>; })}</div></section>;
 }
 
-function ThemeChart({ onOpen }: { onOpen: () => void }) {
-  const rows = [...positiveThemes.slice(0, 2), frictionThemes[0], positiveThemes[2]];
-  return <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-800">Recurring themes</p><h2 className="mt-2 text-2xl font-bold">Most mentioned</h2></div><button className="text-sm font-bold text-blue-700 hover:text-blue-900" onClick={onOpen}>Read AI digest</button></div><div className="mt-7 space-y-5">{rows.map((row) => <div key={row.name}><div className="mb-2 flex justify-between gap-3 text-sm"><span className="font-bold">{row.name}</span><span className="shrink-0 text-slate-500">{row.count} · {Math.round(row.count / 24 * 100)}%</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${row.tone === "positive" ? "bg-teal-600" : "bg-amber-600"}`} style={{ width: `${row.count / 24 * 100}%` }} /></div></div>)}</div></section>;
+function SourcesScreen({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const [setupOpen, setSetupOpen] = useState(false);
+  const sourceCards = [
+    { name: "Google Business Profile", copy: "The manager can connect the account that owns Secret Burger’s verified locations after approving the pilot.", status: "Manager approval required", icon: GoogleLogo, action: "View connection steps", tone: "text-blue-600" },
+    { name: "DoorDash", copy: "Upload the native review export when it is available from the Merchant Portal.", status: "Manual import", icon: Storefront, action: "Upload CSV", tone: "text-[#c81e1e]" },
+    { name: "Uber Eats", copy: "Bring in merchant feedback exports without reformatting reviews by hand.", status: "Manual import", icon: Storefront, action: "Upload CSV", tone: "text-emerald-700" },
+    { name: "Yelp", copy: "Import approved account exports or a VoiceLoop-ready CSV from the business team.", status: "Manual import", icon: Sparkle, action: "Upload CSV", tone: "text-[#c81e1e]" },
+    { name: "Grubhub", copy: "Use the standard VoiceLoop CSV template for reviews exported by the merchant team.", status: "Manual import", icon: UploadSimple, action: "Upload CSV", tone: "text-orange-700" },
+    { name: "Tripadvisor", copy: "Add downloaded review data to the same chain-wide evidence library.", status: "Manual import", icon: Buildings, action: "Upload CSV", tone: "text-emerald-700" },
+  ];
+  return <div className="fade-in">
+    <PageHeading eyebrow="Review connections" title="Bring every guest voice together" copy="Connect sources where secure APIs are available and use the existing CSV flow everywhere else." action={<button className={buttonPrimary} onClick={() => onNavigate("upload")}><CloudArrowUp size={19} weight="bold" />Upload review file</button>} />
+    <section className={`${panelClass} overflow-hidden`}>
+      <div className="grid gap-px bg-stone-300 md:grid-cols-2 xl:grid-cols-3">{sourceCards.map((source) => { const Icon = source.icon; return <article key={source.name} className="flex min-h-[260px] flex-col bg-white p-6"><div className="flex items-start justify-between gap-4"><div className={`grid h-12 w-12 place-items-center rounded-xl border-2 border-stone-200 bg-stone-50 ${source.tone}`}><Icon size={25} weight="bold" /></div><span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-extrabold text-stone-600">{source.status}</span></div><h2 className="mt-5 text-xl font-black tracking-[-0.02em]">{source.name}</h2><p className="mt-2 text-sm leading-6 text-stone-600">{source.copy}</p><button className={`${source.name.startsWith("Google") ? buttonPrimary : buttonSecondary} mt-auto self-start`} onClick={() => source.name.startsWith("Google") ? setSetupOpen(true) : onNavigate("upload")}>{source.action}<ArrowRight size={17} weight="bold" /></button></article>; })}</div>
+    </section>
+    <section className={`${panelClass} mt-6 grid gap-6 p-6 md:grid-cols-[auto_1fr_auto] md:items-center sm:p-7`}><div className="grid h-12 w-12 place-items-center rounded-xl bg-[#fff0d2] text-orange-800"><ChartBar size={24} weight="bold" /></div><div><h2 className="text-xl font-black">One clean review library</h2><p className="mt-1 text-sm leading-6 text-stone-600">VoiceLoop normalizes source names, dates, ratings, and review text after import. The original review stays unchanged and AI analysis is stored separately.</p></div><button className={buttonSecondary} onClick={() => onNavigate("reviews")}>Open reviews</button></section>
+    {setupOpen && <div className="fixed inset-0 z-[80] grid place-items-center bg-stone-950/45 p-4" onMouseDown={() => setSetupOpen(false)}><section role="dialog" aria-modal="true" aria-labelledby="google-setup-title" className={`${panelClass} w-full max-w-xl p-6 sm:p-8`} onMouseDown={(event) => event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-50 text-blue-600"><GoogleLogo size={26} weight="bold" /></div><button className="rounded-lg p-2 text-stone-500 hover:bg-stone-100" onClick={() => setSetupOpen(false)} aria-label="Close Google setup"><X size={20} weight="bold" /></button></div><p className="mt-6 text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Google Business Profile</p><h2 id="google-setup-title" className="mt-2 text-3xl font-black tracking-[-0.035em]">Manager approval comes first</h2><p className="mt-3 leading-7 text-stone-600">When the manager approves the pilot, they will sign in with the Google account that manages Secret Burger’s verified locations and grant VoiceLoop access. VoiceLoop will never ask for or store their Google password.</p><div className="mt-6 rounded-xl border-2 border-stone-300 bg-stone-50 p-4"><div className="flex gap-3"><CheckCircle size={21} weight="fill" className="mt-0.5 shrink-0 text-emerald-700" /><div><p className="font-extrabold">Nothing is connected in this demo</p><p className="mt-1 text-sm leading-6 text-stone-600">The current overview uses clearly labeled sample metrics. Google authorization and review synchronization stay inactive until the manager consents.</p></div></div></div><div className="mt-7 flex justify-end"><button className={buttonSecondary} onClick={() => setSetupOpen(false)}>Got it</button></div></section></div>}
+  </div>;
+}
+
+function SettingsScreen() {
+  const [weeklyDigest, setWeeklyDigest] = useState(true);
+  const [issueAlerts, setIssueAlerts] = useState(true);
+  return <div className="fade-in"><PageHeading eyebrow="Workspace preferences" title="Secret Burger settings" copy="Keep reporting focused on the people and locations responsible for guest experience." />
+    <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+      <section className={`${panelClass} overflow-hidden`}><div className="border-b-2 border-stone-300 p-6 sm:p-7"><h2 className="text-2xl font-black">Notifications</h2><p className="mt-1 text-sm text-stone-600">Choose which changes should reach the manager.</p></div><div className="divide-y-2 divide-stone-200">
+        <PreferenceRow title="Weekly owner digest" copy="A concise Monday summary across every Secret Burger location." enabled={weeklyDigest} onToggle={() => setWeeklyDigest((value) => !value)} />
+        <PreferenceRow title="Urgent issue alerts" copy="Notify the manager when a negative theme rises sharply at one location." enabled={issueAlerts} onToggle={() => setIssueAlerts((value) => !value)} />
+      </div></section>
+      <section className={`${panelClass} p-6 sm:p-7`}><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Workspace</p><h2 className="mt-2 text-2xl font-black">Secret Burger pilot</h2><dl className="mt-6 space-y-4 text-sm"><div><dt className="font-extrabold text-stone-500">Access</dt><dd className="mt-1 font-bold">Private access code</dd></div><div><dt className="font-extrabold text-stone-500">Locations</dt><dd className="mt-1 font-bold">4 demo locations</dd></div><div><dt className="font-extrabold text-stone-500">Google</dt><dd className="mt-1 font-bold">Manager approval required</dd></div></dl></section>
+    </div>
+    <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <LocationManager />
+      <section className={`${panelClass} p-6 sm:p-7`}><div className="flex items-start gap-4"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><ShieldCheck size={23} weight="fill" /></div><div><p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Trust and data</p><h2 className="mt-1 text-2xl font-black">A safe pilot by design</h2></div></div><ul className="mt-6 space-y-4 text-sm leading-6 text-stone-600"><li><strong className="text-stone-950">Private workspace:</strong> the interface and server routes require the pilot access code.</li><li><strong className="text-stone-950">Protected reviews:</strong> anonymous database read and write access is disabled.</li><li><strong className="text-stone-950">Server-side AI:</strong> the OpenAI key is never sent to the browser.</li><li><strong className="text-stone-950">No Google access:</strong> Business Profile synchronization remains inactive until the manager grants consent.</li><li><strong className="text-stone-950">Reversible imports:</strong> each CSV upload is tracked and can be removed as one batch.</li></ul></section>
+    </div>
+  </div>;
+}
+
+function LocationManager() {
+  const [items, setItems] = useState<WorkspaceLocation[]>([]);
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    void fetchLocations()
+      .then((locations) => { setItems(locations); setError(""); })
+      .catch(() => setError("Locations could not be loaded."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const add = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const location = await createLocation(name);
+      setItems((current) => [...current, location]);
+      setName("");
+      setError("");
+    } catch (addError) {
+      setError(addError instanceof Error ? addError.message : "The location could not be added.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggle = async (location: WorkspaceLocation) => {
+    setSaving(true);
+    try {
+      const updated = await updateLocation(location.id, { isActive: !location.is_active });
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setError("");
+    } catch {
+      setError("The location could not be updated.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return <section className={`${panelClass} overflow-hidden`}><div className="border-b-2 border-stone-300 p-6 sm:p-7"><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Location setup</p><h2 className="mt-1 text-2xl font-black">Configure the pilot</h2><p className="mt-1 text-sm leading-6 text-stone-600">These placeholders can be replaced with the manager’s real locations after approval.</p><div className="mt-5 flex gap-2"><label className="min-w-0 flex-1"><span className="sr-only">New location name</span><input value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void add(); }} placeholder="Add a location" className="h-11 w-full rounded-lg border-2 border-stone-300 px-3 text-sm font-bold" /></label><button className={buttonSecondary} disabled={saving || !name.trim()} onClick={() => void add()}><Plus size={17} weight="bold" />Add</button></div>{error && <p role="alert" className="mt-3 text-sm font-bold text-red-800">{error}</p>}</div><div className="divide-y-2 divide-stone-200">{loading ? <p className="p-6 text-sm text-stone-500">Loading locations…</p> : items.map((location) => <div key={location.id} className="flex items-center justify-between gap-4 bg-white px-6 py-4"><div><p className="font-extrabold">{location.name}</p><p className="mt-0.5 text-xs text-stone-500">{location.is_active ? "Active in filters" : "Hidden from filters"}</p></div><button role="switch" aria-checked={location.is_active} aria-label={`${location.name} active`} disabled={saving} onClick={() => void toggle(location)} className={`relative h-7 w-12 shrink-0 rounded-full border-2 transition ${location.is_active ? "border-[#a71919] bg-[#c81e1e]" : "border-stone-300 bg-stone-200"}`}><span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${location.is_active ? "left-6" : "left-0.5"}`} /></button></div>)}</div></section>;
+}
+
+function PreferenceRow({ title, copy, enabled, onToggle }: { title: string; copy: string; enabled: boolean; onToggle: () => void }) {
+  return <div className="flex items-center justify-between gap-5 p-6 sm:p-7"><div><h3 className="font-extrabold">{title}</h3><p className="mt-1 text-sm leading-6 text-stone-600">{copy}</p></div><button role="switch" aria-checked={enabled} aria-label={title} onClick={onToggle} className={`relative h-7 w-12 shrink-0 rounded-full border-2 transition ${enabled ? "border-[#a71919] bg-[#c81e1e]" : "border-stone-300 bg-stone-200"}`}><span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${enabled ? "left-6" : "left-0.5"}`} /></button></div>;
 }
 
 function UploadScreen({ onComplete }: { onComplete: () => void }) {
@@ -163,6 +478,14 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
   const [insertedReviewIds, setInsertedReviewIds] = useState<string[]>([]);
   const [analysisError, setAnalysisError] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [locationOptions, setLocationOptions] = useState<WorkspaceLocation[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("");
+
+  useEffect(() => {
+    void fetchLocations()
+      .then((items) => setLocationOptions(items.filter((item) => item.is_active)))
+      .catch(() => setLocationOptions([]));
+  }, []);
 
   const clearSelection = () => {
     setFileName("");
@@ -219,8 +542,11 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
 
     let reviewIds: string[];
     try {
-      const insertedReviews = await insertReviews(rows);
-      reviewIds = insertedReviews.map(({ id }) => id);
+      const result = await insertReviews(rows, {
+        filename: fileName,
+        locationId: selectedLocation || null,
+      });
+      reviewIds = result.reviews.map(({ id }) => id);
       setUploadedCount(reviewIds.length);
       setInsertedReviewIds(reviewIds);
     } catch (error) {
@@ -333,13 +659,45 @@ function UploadScreen({ onComplete }: { onComplete: () => void }) {
     );
   }
 
-  return <div className="mx-auto max-w-3xl fade-in"><PageHeading eyebrow="Customer feedback intelligence" title="Upload a review CSV" copy="Add one CSV to store validated reviews and refresh Review Explorer." />
+  return <div className="mx-auto max-w-3xl fade-in"><PageHeading eyebrow="Review imports" title="Upload Secret Burger reviews" copy="Add a source export or VoiceLoop-ready CSV to the shared review library." />
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8"><div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="text-xl font-bold">Upload customer reviews</h2><p className="mt-1 text-sm text-slate-600">Upload between 1 and 100 reviews.</p></div><button className="self-start text-sm font-bold text-blue-700" onClick={() => window.alert("Required column: review_text. Optional columns: rating (1–5), review_date (YYYY-MM-DD), source, and reviewer_name. Files may contain 1–100 non-empty rows.")}>CSV requirements</button></div>
       {status === "selected" ? <div className="rounded-xl border border-teal-300 bg-teal-50 p-5 sm:flex sm:items-center sm:justify-between"><div><p className="font-bold text-teal-950">{fileName}</p><p className="mt-1 text-sm text-teal-800">{rows.length} validated {rows.length === 1 ? "review" : "reviews"} ready to upload</p></div><div className="mt-4 flex gap-2 sm:mt-0"><button className={buttonSecondary} onClick={() => inputRef.current?.click()}>Replace</button><button className={buttonSecondary} onClick={clearSelection}>Remove</button></div></div> : <div onDragEnter={() => setDragging(true)} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={drop} className={`grid min-h-60 place-items-center rounded-xl border-2 border-dashed p-6 text-center transition ${dragging ? "border-blue-600 bg-blue-50" : "border-slate-300 bg-slate-50"}`}><div><p className="text-lg font-bold">Drag and drop your CSV here</p><p className="my-2 text-sm text-slate-500">or</p><button className={buttonSecondary} onClick={() => inputRef.current?.click()}>Choose CSV file</button><p className="mt-5 text-sm text-slate-600">The file must include a column named <code className="rounded bg-slate-200 px-1.5 py-0.5 text-xs">review_text</code>.</p></div></div>}
       <input ref={inputRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={(event: ChangeEvent<HTMLInputElement>) => void chooseFile(event.target.files?.[0])} />
+      <label className="mt-5 block"><span className="text-sm font-extrabold text-stone-700">Apply to location <span className="font-medium text-stone-500">(optional)</span></span><select value={selectedLocation} onChange={(event) => setSelectedLocation(event.target.value)} className="mt-2 h-11 w-full rounded-lg border-2 border-stone-300 bg-white px-3 text-sm font-bold"><option value="">Not assigned</option>{locationOptions.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
       {status === "error" && <div role="alert" className="mt-4 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900"><p className="font-bold">We couldn’t use {fileName || "that file"}.</p><ul className="mt-2 list-disc space-y-1 pl-5">{validationErrors.slice(0, 6).map((error) => <li key={error}>{error}</li>)}</ul>{validationErrors.length > 6 && <p className="mt-2">Fix {validationErrors.length - 6} additional validation errors, then try again.</p>}<div className="mt-3 flex gap-2"><button className={buttonPrimary} onClick={() => inputRef.current?.click()}>Choose another file</button><button className={buttonSecondary} onClick={clearSelection}>Back to upload</button></div></div>}
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Valid reviews are stored in your connected Supabase project.</p><button className={buttonPrimary} disabled={status !== "selected"} onClick={() => void upload()}>Upload reviews</button></div>
-    </section><p className="mt-5 text-center text-sm text-slate-600">Need a file to test? <button className="font-bold text-blue-700 underline underline-offset-4" onClick={() => void loadSampleCsv()}>Use sample CSV</button></p></div>;
+    </section><p className="mt-5 text-center text-sm text-slate-600">Need a file to test? <button className="font-bold text-blue-700 underline underline-offset-4" onClick={() => void loadSampleCsv()}>Use sample CSV</button></p><ImportHistory /></div>;
+}
+
+function ImportHistory() {
+  const [items, setItems] = useState<ImportBatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [removing, setRemoving] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void fetchImports()
+      .then(setItems)
+      .catch(() => setMessage("Import history is temporarily unavailable."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const remove = async (item: ImportBatch) => {
+    const confirmed = window.confirm(`Undo ${item.filename}? This removes all ${item.row_count} reviews from that import.`);
+    if (!confirmed) return;
+    setRemoving(item.id);
+    try {
+      const result = await undoImport(item.id);
+      setItems((current) => current.filter((candidate) => candidate.id !== item.id));
+      setMessage(`${result.removedReviews} imported reviews were removed.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "That import could not be undone.");
+    } finally {
+      setRemoving("");
+    }
+  };
+
+  return <section className={`${panelClass} mt-8 overflow-hidden`}><div className="border-b-2 border-stone-300 p-5 sm:px-7"><p className="text-xs font-black uppercase tracking-[0.14em] text-[#b91c1c]">Import history</p><h2 className="mt-1 text-2xl font-black">Recent review files</h2><p className="mt-1 text-sm text-stone-500">Every import remains identifiable and reversible during the pilot.</p></div>{message && <p role="status" className="border-b-2 border-stone-200 bg-stone-50 px-6 py-3 text-sm font-bold text-stone-700">{message}</p>}{loading ? <p className="p-6 text-sm text-stone-500">Loading import history…</p> : items.length ? <div className="divide-y-2 divide-stone-200">{items.map((item) => <div key={item.id} className="flex flex-col gap-3 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"><div><p className="font-extrabold">{item.filename}</p><p className="mt-1 text-xs text-stone-500">{item.row_count} reviews · {new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(item.created_at))}</p></div><button className={buttonSecondary} disabled={removing === item.id} onClick={() => void remove(item)}>{removing === item.id ? "Removing…" : "Undo import"}</button></div>)}</div> : <p className="p-6 text-sm text-stone-500">No tracked imports yet. Existing prototype reviews remain untouched.</p>}</section>;
 }
 
 function StatusPanel({ eyebrow, title, copy, loading = false, tone, action }: { eyebrow: string; title: string; copy: string; loading?: boolean; tone: "blue" | "green" | "red"; action?: React.ReactNode }) {
@@ -421,7 +779,7 @@ function ReviewExplorer({ revision }: { revision: number }) {
   const current = Math.min(page, pages);
   const update = <T,>(setter: (value: T) => void, value: T) => { setLoading(true); setter(value); setPage(1); };
   const clear = () => { setLoading(true); setQuery(""); setDebouncedQuery(""); setSource(""); setReviewDate(""); setSort("Newest"); setPage(1); };
-  return <div className="fade-in"><PageHeading eyebrow="Source evidence" title="Review explorer" copy={`Search, filter, and sort ${total} reviews stored in your VoiceLoop workspace.`} />
+  return <div className="fade-in"><PageHeading eyebrow="Guest evidence" title="Review explorer" copy={`Search, filter, and sort ${total} reviews across the Secret Burger workspace.`} />
     <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-[1fr_170px_190px_180px]"><label><span className="sr-only">Search reviews</span><input value={query} onChange={(e) => update(setQuery, e.target.value)} placeholder="Search review text" className="h-11 w-full rounded-lg border border-slate-300 px-4 text-sm focus:border-blue-600" /></label><Select label="Source" value={source} options={["", ...sources]} optionLabels={{ "": "All sources" }} onChange={(value) => update(setSource, value)} /><label><span className="sr-only">Review date</span><input aria-label="Review date" type="date" value={reviewDate} onInput={(event) => update(setReviewDate, event.currentTarget.value)} className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 focus:border-blue-600" /></label><Select label="Sort reviews" value={sort} options={["Newest", "Oldest"]} onChange={(value) => update(setSort, value as "Newest" | "Oldest")} /></div></section>
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-bold">Customer reviews</h2><p className="mt-1 text-sm text-slate-500">Showing {total} matching reviews</p></div><button className={buttonSecondary} onClick={clear}>Clear filters</button></div>
       {loading ? <div className="p-10 text-center"><h3 className="text-xl font-bold">Loading reviews</h3><p className="mt-2 text-slate-600">Reading the latest data from Supabase.</p></div> : loadError ? <div role="alert" className="p-10 text-center"><h3 className="text-xl font-bold">Reviews unavailable</h3><p className="mt-2 text-slate-600">{loadError}</p><button className={`${buttonPrimary} mt-5`} onClick={() => { setLoading(true); setLoadError(""); setRefreshKey((value) => value + 1); }}>Try again</button></div> : storedReviews.length ? <><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[860px] border-collapse text-left"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-4">Review</th><th className="px-5 py-4">Theme</th><th className="px-5 py-4">Sentiment</th><th className="px-5 py-4">Rating</th><th className="px-5 py-4">Source</th></tr></thead><tbody className="divide-y divide-slate-100">{storedReviews.map((review) => <ReviewRow key={review.id} review={review} />)}</tbody></table></div><div className="space-y-3 p-4 md:hidden">{storedReviews.map((review) => <ReviewCard key={review.id} review={review} />)}</div></> : <div className="p-10 text-center"><h3 className="text-xl font-bold">No reviews match</h3><p className="mt-2 text-slate-600">Upload a CSV or try a broader search.</p><button className={`${buttonPrimary} mt-5`} onClick={clear}>Clear filters</button></div>}
@@ -459,8 +817,8 @@ function ReviewCard({ review }: { review: ReviewRecord }) {
 }
 
 function AIDigest({ onOpenTheme }: { onOpenTheme: (theme: Theme) => void }) {
-  return <div className="fade-in"><PageHeading eyebrow="AI-assisted review analysis" title="AI digest" copy="A concise summary of the recurring themes in your current review dataset." />
-    <section className="rounded-xl border border-violet-200 bg-violet-50 p-5 shadow-sm sm:p-7"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-violet-700">AI-generated summary</p><h2 className="mt-2 text-2xl font-bold">Weekly feedback snapshot</h2></div><button className={buttonSecondary} onClick={() => window.print()}>Print digest</button></div><p className="mt-5 max-w-5xl text-base leading-8 text-slate-700">Customers most often praised food quality and friendly staff. The clearest recurring complaint was slow service and wait times, mentioned in 6 reviews. Food temperature and parking were smaller but repeated friction points. Check the evidence before deciding what deserves attention.</p></section>
+  return <div className="fade-in"><PageHeading eyebrow="AI-assisted review analysis" title="Secret Burger AI digest" copy="A concise, evidence-linked summary of recurring themes across the chain." />
+    <section className="rounded-xl border-2 border-stone-300 bg-[#fff8e7] p-5 shadow-[0_5px_0_rgba(41,37,36,0.08)] sm:p-7"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.12em] text-[#b91c1c]">AI-generated summary</p><h2 className="mt-2 text-2xl font-black">Weekly feedback snapshot</h2></div><button className={buttonSecondary} onClick={() => window.print()}>Print digest</button></div><p className="mt-5 max-w-5xl text-base leading-8 text-stone-700">Guests most often praised burger quality, friendly teams, and fresh delivery orders. The clearest recurring complaint is slow service at Riverside during the dinner rush. Food temperature and order accuracy are smaller but repeated delivery friction points. Check the supporting reviews before choosing an operational response.</p></section>
     <div className="mt-6 grid gap-6 lg:grid-cols-2"><ThemeList title="What customers love" kicker="Positive feedback" themes={positiveThemes} onOpen={onOpenTheme} /><ThemeList title="What customers complain about" kicker="Recurring friction" themes={frictionThemes} onOpen={onOpenTheme} /></div>
     <section className="mt-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-[0.12em] text-amber-800">Investigate first</p><div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-2xl font-bold">Slow service and wait times</h2><p className="mt-2 text-sm leading-6 text-slate-700">This theme has the highest displayed complaint mention count. Review the quotes before choosing an operational response.</p></div><button className={buttonSecondary} onClick={() => onOpenTheme(frictionThemes[0])}>View evidence</button></div></section>
     <div className="mt-6 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-900"><strong>Use these findings as a starting point.</strong> VoiceLoop identifies patterns in the uploaded reviews; it does not determine root causes or prescribe fixes.</div>

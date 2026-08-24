@@ -1,4 +1,3 @@
-import { supabase } from "@/lib/supabase/client";
 import type {
   ReviewInsert,
   ReviewRecord,
@@ -21,14 +20,23 @@ export type ReviewsPage = {
   total: number;
 };
 
-export async function insertReviews(rows: ReviewInsert[]) {
-  const { data, error } = await supabase
-    .from("reviews")
-    .insert(rows)
-    .select("id");
+async function readJson<T>(response: Response): Promise<T> {
+  const result = (await response.json()) as T & { message?: string };
+  if (!response.ok) throw new Error(result.message ?? "VoiceLoop could not complete the request.");
+  return result;
+}
 
-  if (error) throw error;
-  return data;
+export async function insertReviews(
+  rows: ReviewInsert[],
+  options: { filename: string; locationId?: string | null },
+) {
+  return readJson<{ reviews: { id: string }[]; importBatchId: string }>(
+    await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows, ...options }),
+    }),
+  );
 }
 
 export async function fetchReviews({
@@ -38,45 +46,19 @@ export async function fetchReviews({
   sort,
   page,
 }: ReviewFilters): Promise<ReviewsPage> {
-  const from = (page - 1) * REVIEWS_PAGE_SIZE;
-  const to = from + REVIEWS_PAGE_SIZE - 1;
-  const ascending = sort === "oldest";
-
-  let query = supabase.from("reviews").select("*", { count: "exact" });
-
-  if (search.trim()) {
-    query = query.ilike("review_text", `%${search.trim()}%`);
-  }
-  if (source) {
-    query = query.eq("source", source);
-  }
-  if (reviewDate) {
-    query = query.eq("review_date", reviewDate);
-  }
-
-  const { data, error, count } = await query
-    .order("review_date", { ascending, nullsFirst: false })
-    .order("created_at", { ascending })
-    .range(from, to);
-
-  if (error) throw error;
-
-  return {
-    reviews: data,
-    total: count ?? 0,
-  };
+  const params = new URLSearchParams({
+    search,
+    source,
+    reviewDate,
+    sort,
+    page: String(page),
+  });
+  return readJson<ReviewsPage>(await fetch(`/api/reviews?${params}`, { cache: "no-store" }));
 }
 
 export async function fetchReviewSources() {
-  const { data, error } = await supabase
-    .from("reviews")
-    .select("source")
-    .not("source", "is", null)
-    .order("source");
-
-  if (error) throw error;
-
-  return Array.from(
-    new Set(data.map(({ source }) => source).filter((value): value is string => !!value)),
+  const result = await readJson<{ sources: string[] }>(
+    await fetch("/api/reviews/sources", { cache: "no-store" }),
   );
+  return result.sources;
 }

@@ -1,55 +1,54 @@
-# VoiceLoop React MVP Design QA
+# Secret Burger VoiceLoop design QA
 
 ## Evidence
 
-- Source visual truth: `C:/Users/veerk/Documents/Codex/2026-08-19/f/outputs/voiceloop-complete-website/voiceloop-vanilla-prototype/qa/workspace-dashboard-final-v2.png`
-- Implementation screenshot: `C:/Users/veerk/OneDrive/Documents/Voiceloop/qa-dashboard-implementation.png`
-- Mobile implementation screenshot: `C:/Users/veerk/OneDrive/Documents/Voiceloop/qa-dashboard-mobile.png`
-- Browser route: `http://localhost:3000/`
-- Desktop browser CSS viewport: 1707 × 1100 px, device density 1
-- Source pixels: 2249 × 1441 px
-- Desktop implementation pixels: 1692 × 1229 px
-- Mobile browser CSS viewport: 390 × 844 px, device density 1
-- Mobile implementation pixels: 376 × 2452 px (full-page capture)
-- State: populated dashboard with 24 sample restaurant reviews
+- Source visual truth: `C:\Users\veerk\.codex\generated_images\01a02074-6123-7933-850f-230f04130a9f\exec-28268887-5dc4-4923-8d32-5a51a815af72.png`
+- Browser-rendered implementation: `C:\Users\veerk\OneDrive\Documents\Voiceloop\qa-secret-burger-mobile.png`
+- Combined comparison: `C:\Users\veerk\OneDrive\Documents\Voiceloop\qa-secret-burger-comparison.png`
+- Source pixels: 1487 × 1058.
+- Implementation pixels: 615 × 2486 full-page capture.
+- Browser CSS viewport: 630 × 774 at device pixel ratio 1.020833.
+- State: Overview, All locations, default attention and chain-health state.
+- Normalization: the implementation was captured in the user's active narrow Codex browser panel. Its first 1058 pixels were placed beside the full desktop visual target without density resampling. The differing widths are an intentional desktop-to-mobile responsive comparison, so layout measurements were not judged as direct pixel matches.
 
-## Full-view Comparison
+## Full-view comparison evidence
 
-- Information hierarchy matches the approved workspace: brand header, overview heading, four metrics, paired sentiment/theme cards, violet AI summary, and investigation priority.
-- The implementation preserves the source content width, white/slate surfaces, 12 px card radii, light borders, restrained shadows, navy text, blue actions, teal praise, amber friction, and violet AI treatment.
-- The supplied VoiceLoop logo is reused directly with `next/image`; no substitute artwork or placeholder imagery was introduced.
-- The reference screenshot contains a known right-edge capture crop documented by the source QA. The implementation has no horizontal DOM overflow and does not reproduce that capture artifact.
+The responsive implementation preserves the source's cream canvas, Secret Burger red and ink palette, location-first navigation, dominant attention panel, chain-health section, source-freshness section, outlined cards, restrained elevation, neutral secondary actions, and strong serif display hierarchy. The desktop two-column attention area stacks into a single-column mobile reading order. Persistent controls remain reachable; the location row scrolls horizontally rather than clipping labels.
 
-## Focused Comparison
+## Focused region comparison evidence
 
-- Typography: system sans family, display weights, 12 px uppercase kickers, body line height, and wrapping match the source hierarchy.
-- Charts: sentiment and theme labels, counts, semantic colors, track styling, and percentage-scaled fills match the approved treatment.
-- Controls: primary/secondary buttons retain the source 44 px minimum height, border weight, radius, focus ring, and state contrast.
-- Mobile: metric and chart grids stack, actions become full-width where helpful, tables become review cards, menus remain keyboard accessible, and the evidence drawer uses the full available width.
+The combined comparison keeps the header, location selector, attention card, action buttons, and the start of chain health readable at native density. A second crop was unnecessary because the remaining source-freshness and table patterns repeat the same border, type, color, and spacing tokens already visible in those regions.
 
-## Interaction Checks
+## Required fidelity surfaces
 
-- Menu exposes and opens Dashboard, Review Explorer, AI Digest, and Upload CSV.
-- Review search for `parking` returns exactly 3 matching sample reviews.
-- Sentiment/theme filters, sorting, pagination, and clear-filter behavior use local React state.
-- AI Digest theme cards open the evidence drawer; the drawer closes by button, backdrop, or Escape.
-- Upload supports empty, selected, invalid-file error, loading, success, and analysis-error states.
-- A clean browser session showed no Next.js error overlay and no console errors.
-- Desktop and 390 px mobile checks showed no horizontal overflow.
+- Fonts and typography: Georgia/Times display fallbacks now mirror the editorial serif hierarchy in the reference; compact UI text stays sans-serif. Heading scale and weight were increased per the selected revision.
+- Spacing and layout rhythm: 18px panels, 2px stone borders, five-pixel low-contrast shadows, 24–32px internal spacing, and stacked mobile actions create the requested clearer separation without crowding.
+- Colors and visual tokens: cream, Secret Burger red, espresso ink, warm stone borders, emerald positive states, and orange warning states remain consistent across the shell and legacy data flows.
+- Image and icon fidelity: interface icons come from Phosphor; no placeholder imagery, emoji, CSS drawings, or custom SVG approximations were introduced. The Secret Burger mark is typographic because the visual target itself is typographic and no official brand asset was supplied.
+- Copy and content: all overview copy, sample evidence, location names, source names, and manager context are Secret Burger-specific. Live Google connection copy clearly distinguishes prepared UI from an activated OAuth integration.
 
-## Comparison History
+## Comparison history
 
-1. Initial pass found one P2: recurring-theme bars were rendered on a 50%-maximum relative scale instead of the source's total-review percentage scale.
-2. Fixed `ThemeChart` to calculate fill width as `count / 24 * 100`.
-3. Post-fix desktop evidence in `qa-dashboard-implementation.png` shows 25% fills for six-mention themes and 17% for the four-mention theme, matching the source.
-4. No actionable P0, P1, or P2 findings remain.
+1. Initial P2: implementation typography was heavier sans-serif than the selected editorial reference. Fix: applied a serif display family to headings and the Secret Burger mark, then recaptured the implementation.
+2. Initial P2: the previous VoiceLoop cards were too faint and secondary actions were blue/red. Fix: standardized two-pixel stone outlines, subtle low shadows, larger headings, and black/grey secondary buttons throughout the Secret Burger shell and existing screens.
+3. Post-fix evidence: `qa-secret-burger-comparison.png` shows both fixes in the header, attention card, chain-health card, and secondary actions. No actionable P0, P1, or P2 visual issues remain.
 
-## Findings
+## Interaction and console verification
 
-- No blocking or moderate fidelity findings remain.
+- Location switching updates the overview location-performance state.
+- Evidence drawer opens with matching Secret Burger review quotes and closes correctly.
+- Sidebar/mobile menu navigation works for Overview, Reviews, Sources, Uploads, AI digest, and Settings.
+- Review search queries Supabase and updates pagination/results.
+- Source cards route to upload; Google opens a consent-safe setup dialog.
+- Sample CSV validates as eight rows without inserting data during QA.
+- Settings switches update their accessible `aria-checked` state.
+- Browser console: no errors observed after navigation and interaction checks.
+- Production build: passed.
+- ESLint: passed.
 
-## Follow-up Polish
+## Follow-up polish
 
-- P3: replace the temporary raster logo if a cleaner transparent brand export becomes available.
+- P3: replace the typographic Secret Burger mark with an official supplied logo asset if the client provides one.
+- P3: connect the prepared Google consent flow after OAuth credentials and manager approval are available.
 
 final result: passed

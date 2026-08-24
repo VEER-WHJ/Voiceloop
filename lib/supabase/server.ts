@@ -6,14 +6,15 @@ import type { Database } from "./database.types";
 
 export function createServerSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabasePublishableKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabasePublishableKey) {
-    throw new Error("Supabase server environment variables are not configured.");
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured on the server.",
+    );
   }
 
-  return createClient<Database>(supabaseUrl, supabasePublishableKey, {
+  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

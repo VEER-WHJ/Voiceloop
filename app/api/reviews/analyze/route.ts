@@ -9,6 +9,7 @@ import {
   MissingOpenAIKeyError,
   REVIEW_ANALYSIS_MODEL,
 } from "@/lib/analysis/openai";
+import { requireSession, requestHasAllowedOrigin, unauthorized } from "@/lib/auth/request";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -27,17 +28,6 @@ function json(body: object, status = 200) {
     status,
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-function requestHasAllowedOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-
-  try {
-    return new URL(origin).origin === new URL(request.url).origin;
-  } catch {
-    return false;
-  }
 }
 
 function parseRequest(value: unknown) {
@@ -74,6 +64,7 @@ function parseRequest(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  if (!(await requireSession())) return unauthorized();
   if (!requestHasAllowedOrigin(request)) {
     return json({ message: "Cross-origin analysis requests are not allowed." }, 403);
   }
