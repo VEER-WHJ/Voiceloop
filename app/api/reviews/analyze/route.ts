@@ -64,7 +64,8 @@ function parseRequest(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
   if (!requestHasAllowedOrigin(request)) {
     return json({ message: "Cross-origin analysis requests are not allowed." }, 403);
   }
@@ -94,7 +95,8 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   let query = supabase
     .from("reviews")
-    .select("id, review_text")
+    .select("id, review_text, ordered_items")
+    .eq("owner_user_id", userId)
     .is("theme", null)
     .is("sentiment", null)
     .order("created_at", { ascending: true })
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
 
   const { data: reviews, error: fetchError } = await query;
   if (fetchError) {
-    console.error("VoiceLoop could not fetch unanalyzed reviews.", fetchError);
+    console.error("Circuit could not fetch unanalyzed reviews.", fetchError);
     return json({ message: "Supabase could not load reviews for analysis." }, 502);
   }
 
@@ -126,7 +128,7 @@ export async function POST(request: Request) {
     try {
       analysis = await analyzeReviewBatch(batch);
     } catch (error) {
-      console.error("VoiceLoop OpenAI batch analysis failed.", error);
+      console.error("Circuit OpenAI batch analysis failed.", error);
       result.failed += batch.length;
       result.errors.push(
         `A batch of ${batch.length} ${batch.length === 1 ? "review" : "reviews"} could not be analyzed.`,
@@ -142,12 +144,13 @@ export async function POST(request: Request) {
           sentiment: item.sentiment.toLowerCase(),
         })
         .eq("id", item.id)
+        .eq("owner_user_id", userId)
         .is("theme", null)
         .is("sentiment", null)
         .select("id");
 
       if (updateError || updatedRows.length !== 1) {
-        console.error("VoiceLoop could not save a review analysis.", updateError);
+        console.error("Circuit could not save a review analysis.", updateError);
         result.failed += 1;
         result.errors.push(`Analysis could not be saved for review ${item.id}.`);
       } else {

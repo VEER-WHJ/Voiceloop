@@ -6,6 +6,7 @@ import type {
 export const REVIEWS_PAGE_SIZE = 6;
 
 export type ReviewSort = "newest" | "oldest";
+export type ReviewQuality = "standard" | "all" | "review";
 
 export type ReviewFilters = {
   search: string;
@@ -13,6 +14,8 @@ export type ReviewFilters = {
   reviewDate: string;
   sort: ReviewSort;
   page: number;
+  quality: ReviewQuality;
+  locationId: string;
 };
 
 export type ReviewsPage = {
@@ -22,7 +25,7 @@ export type ReviewsPage = {
 
 async function readJson<T>(response: Response): Promise<T> {
   const result = (await response.json()) as T & { message?: string };
-  if (!response.ok) throw new Error(result.message ?? "VoiceLoop could not complete the request.");
+  if (!response.ok) throw new Error(result.message ?? "Circuit could not complete the request.");
   return result;
 }
 
@@ -45,6 +48,8 @@ export async function fetchReviews({
   reviewDate,
   sort,
   page,
+  quality,
+  locationId,
 }: ReviewFilters): Promise<ReviewsPage> {
   const params = new URLSearchParams({
     search,
@@ -52,13 +57,15 @@ export async function fetchReviews({
     reviewDate,
     sort,
     page: String(page),
+    quality,
+    locationId,
   });
   return readJson<ReviewsPage>(await fetch(`/api/reviews?${params}`, { cache: "no-store" }));
 }
 
-export async function fetchReviewSources() {
+export async function fetchReviewSources(locationId = "all") {
   const result = await readJson<{ sources: string[] }>(
-    await fetch("/api/reviews/sources", { cache: "no-store" }),
+    await fetch(`/api/reviews/sources?locationId=${encodeURIComponent(locationId)}`, { cache: "no-store" }),
   );
   return result.sources;
 }

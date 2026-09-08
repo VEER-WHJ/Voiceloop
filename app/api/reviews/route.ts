@@ -47,6 +47,15 @@ function sanitizeRow(value: unknown): ReviewInsert {
     reviewDate = row.review_date;
   }
 
+  let reviewerReviewCount: number | null = null;
+  if (row.reviewer_review_count !== null && row.reviewer_review_count !== undefined && row.reviewer_review_count !== "") {
+    if (!Number.isInteger(row.reviewer_review_count) || Number(row.reviewer_review_count) < 0) throw new Error("Reviewer review counts must be non-negative whole numbers.");
+    reviewerReviewCount = Number(row.reviewer_review_count);
+  }
+  const reviewerIsVerified = typeof row.reviewer_is_verified === "boolean" ? row.reviewer_is_verified : null;
+  const providerFlagged = row.provider_flagged === true;
+  const needsReview = reviewerReviewCount !== null && reviewerReviewCount <= 1 && reviewerIsVerified !== true;
+
   return {
     review_text: reviewText,
     rating,
@@ -55,17 +64,25 @@ function sanitizeRow(value: unknown): ReviewInsert {
     reviewer_name: optionalText(row.reviewer_name),
     sentiment: null,
     theme: null,
+    reviewer_review_count: reviewerReviewCount,
+    reviewer_is_verified: reviewerIsVerified,
+    provider_flagged: providerFlagged,
+    legitimacy_status: providerFlagged ? "excluded" : reviewerIsVerified || (reviewerReviewCount !== null && reviewerReviewCount >= 5) ? "trusted" : needsReview ? "review" : "unassessed",
+    legitimacy_reason: providerFlagged ? "The source platform flagged this review or account." : needsReview ? "Reviewer account has one or fewer prior reviews." : null,
   };
 }
 
 export async function GET(request: Request) {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("search")?.trim() ?? "";
   const source = searchParams.get("source") ?? "";
   const reviewDate = searchParams.get("reviewDate") ?? "";
   const sort = searchParams.get("sort") === "oldest" ? "oldest" : "newest";
+  const quality = searchParams.get("quality") === "all" ? "all" : searchParams.get("quality") === "review" ? "review" : "standard";
+  const locationId = searchParams.get("locationId") ?? "all";
   const requestedPage = Number(searchParams.get("page") ?? "1");
   const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const from = (page - 1) * PAGE_SIZE;
@@ -73,11 +90,14 @@ export async function GET(request: Request) {
   const ascending = sort === "oldest";
 
   const supabase = createServerSupabaseClient();
-  let query = supabase.from("reviews").select("*", { count: "exact" });
+  let query = supabase.from("reviews").select("*", { count: "exact" }).eq("owner_user_id", userId);
 
   if (search) query = query.ilike("review_text", `%${search}%`);
   if (source) query = query.eq("source", source);
   if (reviewDate) query = query.eq("review_date", reviewDate);
+  if (locationId !== "all") query = query.eq("location_id", locationId);
+  if (quality === "standard") query = query.neq("legitimacy_status", "excluded");
+  if (quality === "review") query = query.in("legitimacy_status", ["review", "excluded"]);
 
   const { data, error, count } = await query
     .order("review_date", { ascending, nullsFirst: false })
@@ -85,7 +105,7 @@ export async function GET(request: Request) {
     .range(from, to);
 
   if (error) {
-    console.error("VoiceLoop could not load reviews.", error);
+    console.error("Circuit could not load reviews.", error);
     return Response.json({ message: "Reviews could not be loaded." }, { status: 502 });
   }
 
@@ -96,7 +116,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
   if (!requestHasAllowedOrigin(request)) {
     return Response.json({ message: "Cross-origin uploads are not allowed." }, { status: 403 });
   }
@@ -119,9 +140,13 @@ export async function POST(request: Request) {
         ? body.locationId
         : (() => { throw new Error("Choose a valid location."); })();
     const supabase = createServerSupabaseClient();
+    if (locationId) {
+      const { count: matchingLocation } = await supabase.from("locations").select("id", { count: "exact", head: true }).eq("id", locationId).eq("owner_user_id", userId);
+      if (matchingLocation !== 1) throw new Error("Choose a location from your workspace.");
+    }
     const { data: batch, error: batchError } = await supabase
       .from("import_batches")
-      .insert({ filename, row_count: rows.length, status: "processing" })
+      .insert({ filename, row_count: rows.length, status: "processing", owner_user_id: userId })
       .select("id")
       .single();
 
@@ -131,27 +156,29 @@ export async function POST(request: Request) {
       .from("reviews")
       .insert(rows.map((row) => ({
         ...row,
+        owner_user_id: userId,
         import_batch_id: batch.id,
         location_id: locationId,
       })))
       .select("id");
 
     if (insertError) {
-      await supabase.from("import_batches").delete().eq("id", batch.id);
+      await supabase.from("import_batches").delete().eq("id", batch.id).eq("owner_user_id", userId);
       throw insertError;
     }
 
     await supabase
       .from("import_batches")
       .update({ status: "complete" })
-      .eq("id", batch.id);
+      .eq("id", batch.id)
+      .eq("owner_user_id", userId);
 
     return Response.json(
       { reviews: inserted, importBatchId: batch.id },
       { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    console.error("VoiceLoop could not save an import.", error);
+    console.error("Circuit could not save an import.", error);
     return Response.json(
       { message: error instanceof Error ? error.message : "Reviews could not be saved." },
       { status: 400 },

@@ -4,7 +4,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function PATCH(request: Request, context: RouteContext<"/api/locations/[id]">) {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
   if (!requestHasAllowedOrigin(request)) {
     return Response.json({ message: "Cross-origin changes are not allowed." }, { status: 403 });
   }
@@ -31,6 +32,7 @@ export async function PATCH(request: Request, context: RouteContext<"/api/locati
     .from("locations")
     .update(updates)
     .eq("id", id)
+    .eq("owner_user_id", userId)
     .select("*")
     .single();
   if (error) return Response.json({ message: "The location could not be updated." }, { status: 400 });

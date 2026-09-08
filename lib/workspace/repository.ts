@@ -25,9 +25,26 @@ export type ManagerAction = {
   updated_at: string;
 };
 
+export type Competitor = {
+  id: string;
+  name: string;
+  website: string | null;
+  latest_summary: string | null;
+  latest_sources: { title: string; url: string }[];
+  last_researched_at: string | null;
+};
+
+export type SourceConnection = {
+  provider: string;
+  status: string;
+  account_label: string | null;
+  last_synced_at: string | null;
+  location_id: string | null;
+};
+
 async function readJson<T>(response: Response): Promise<T> {
   const result = (await response.json()) as T & { message?: string };
-  if (!response.ok) throw new Error(result.message ?? "VoiceLoop could not complete the request.");
+  if (!response.ok) throw new Error(result.message ?? "Circuit could not complete the request.");
   return result;
 }
 
@@ -108,4 +125,36 @@ export async function updateManagerAction(
     }),
   );
   return result.action;
+}
+
+export async function fetchCompetitors() {
+  const result = await readJson<{ competitors: Competitor[] }>(
+    await fetch("/api/competitors", { cache: "no-store" }),
+  );
+  return result.competitors;
+}
+
+export async function createCompetitor(name: string, website?: string) {
+  const result = await readJson<{ competitor: Competitor }>(
+    await fetch("/api/competitors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, website }),
+    }),
+  );
+  return result.competitor;
+}
+
+export async function runCompetitorResearch(id: string) {
+  const result = await readJson<{ competitor: Competitor }>(
+    await fetch(`/api/competitors/${id}/research`, { method: "POST" }),
+  );
+  return result.competitor;
+}
+
+export async function fetchSourceConnections(locationId: string) {
+  const result = await readJson<{ connections: SourceConnection[] }>(
+    await fetch(`/api/connections?locationId=${encodeURIComponent(locationId)}`, { cache: "no-store" }),
+  );
+  return result.connections;
 }

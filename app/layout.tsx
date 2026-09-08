@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Secret Burger Guest Intelligence — powered by VoiceLoop",
-  description: "One clear view of guest feedback across every Secret Burger location.",
+  title: "Circuit Feedback",
+  description: "One clear view of customer feedback across every location.",
   robots: {
     index: false,
     follow: false,

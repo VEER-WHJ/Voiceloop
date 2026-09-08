@@ -10,10 +10,12 @@ function cleanText(value: unknown, maxLength: number, required = false) {
 }
 
 export async function GET() {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
   const { data, error } = await createServerSupabaseClient()
     .from("manager_actions")
     .select("*")
+    .eq("owner_user_id", userId)
     .order("status")
     .order("created_at", { ascending: false });
   if (error) return Response.json({ message: "Manager actions could not be loaded." }, { status: 502 });
@@ -21,7 +23,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
   if (!requestHasAllowedOrigin(request)) {
     return Response.json({ message: "Cross-origin changes are not allowed." }, { status: 403 });
   }
@@ -37,6 +40,7 @@ export async function POST(request: Request) {
         location_name: cleanText(body.locationName, 80),
         priority,
         status: "open",
+        owner_user_id: userId,
       })
       .select("*")
       .single();

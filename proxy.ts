@@ -1,27 +1,41 @@
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-
-import { isValidSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isLoginRoute = pathname === "/login";
-  const isPublicApi = pathname === "/api/auth/login" || pathname === "/api/health";
-  const validSession = await isValidSession(
-    request.cookies.get(SESSION_COOKIE_NAME)?.value,
+  const isAuthCallback = pathname === "/auth/callback";
+  const isPublicApi = pathname === "/api/auth/login" || pathname === "/api/auth/signup" || pathname === "/api/health";
+  let response = NextResponse.next({ request });
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (values) => {
+          for (const { name, value } of values) request.cookies.set(name, value);
+          response = NextResponse.next({ request });
+          for (const { name, value, options } of values) response.cookies.set(name, value, options);
+        },
+      },
+    },
   );
+  const { data } = await supabase.auth.getClaims();
+  const validSession = Boolean(data?.claims?.sub);
 
-  if (isPublicApi) return NextResponse.next();
+  if (isPublicApi || isAuthCallback) return response;
 
   if (isLoginRoute) {
     return validSession
       ? NextResponse.redirect(new URL("/", request.url))
-      : NextResponse.next();
+      : response;
   }
 
   if (!validSession) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(
-        { message: "VoiceLoop access is required." },
+        { message: "Circuit account access is required." },
         { status: 401 },
       );
     }
@@ -29,7 +43,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {

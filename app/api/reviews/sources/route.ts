@@ -3,14 +3,18 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  if (!(await requireSession())) return unauthorized();
+export async function GET(request: Request) {
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
 
-  const { data, error } = await createServerSupabaseClient()
+  const locationId = new URL(request.url).searchParams.get("locationId") ?? "all";
+  let query = createServerSupabaseClient()
     .from("reviews")
     .select("source")
-    .not("source", "is", null)
-    .order("source");
+    .eq("owner_user_id", userId)
+    .not("source", "is", null);
+  if (locationId !== "all") query = query.eq("location_id", locationId);
+  const { data, error } = await query.order("source");
 
   if (error) {
     return Response.json({ message: "Review sources could not be loaded." }, { status: 502 });

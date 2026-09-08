@@ -2,10 +2,14 @@
 /.next
 /out
 *.log
+*.tsbuildinfo
 .env*
+*.tsbuildinfo
 !.env.example
 .DS_Store
 *.pem
 qa-secret-burger-*.png
 
 .vercel
+
+.env*

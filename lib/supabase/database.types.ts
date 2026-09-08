@@ -14,6 +14,15 @@ export type Database = {
           import_batch_id: string | null;
           location_id: string | null;
           external_review_id: string | null;
+          owner_user_id: string | null;
+          external_order_id: string | null;
+          ordered_items: string[];
+          feedback_channel: string | null;
+          reviewer_review_count: number | null;
+          reviewer_is_verified: boolean | null;
+          provider_flagged: boolean;
+          legitimacy_status: "trusted" | "review" | "excluded" | "unassessed";
+          legitimacy_reason: string | null;
           created_at: string;
         };
         Insert: {
@@ -28,6 +37,15 @@ export type Database = {
           import_batch_id?: string | null;
           location_id?: string | null;
           external_review_id?: string | null;
+          owner_user_id?: string | null;
+          external_order_id?: string | null;
+          ordered_items?: string[];
+          feedback_channel?: string | null;
+          reviewer_review_count?: number | null;
+          reviewer_is_verified?: boolean | null;
+          provider_flagged?: boolean;
+          legitimacy_status?: "trusted" | "review" | "excluded" | "unassessed";
+          legitimacy_reason?: string | null;
           created_at?: string;
         };
         Update: {
@@ -41,6 +59,15 @@ export type Database = {
           import_batch_id?: string | null;
           location_id?: string | null;
           external_review_id?: string | null;
+          owner_user_id?: string | null;
+          external_order_id?: string | null;
+          ordered_items?: string[];
+          feedback_channel?: string | null;
+          reviewer_review_count?: number | null;
+          reviewer_is_verified?: boolean | null;
+          provider_flagged?: boolean;
+          legitimacy_status?: "trusted" | "review" | "excluded" | "unassessed";
+          legitimacy_reason?: string | null;
         };
         Relationships: [];
       };
@@ -53,6 +80,7 @@ export type Database = {
           sort_order: number;
           created_at: string;
           updated_at: string;
+          owner_user_id: string | null;
         };
         Insert: {
           id?: string;
@@ -62,6 +90,7 @@ export type Database = {
           sort_order?: number;
           created_at?: string;
           updated_at?: string;
+          owner_user_id?: string | null;
         };
         Update: {
           slug?: string;
@@ -69,6 +98,7 @@ export type Database = {
           is_active?: boolean;
           sort_order?: number;
           updated_at?: string;
+          owner_user_id?: string | null;
         };
         Relationships: [];
       };
@@ -79,6 +109,7 @@ export type Database = {
           row_count: number;
           status: string;
           created_at: string;
+          owner_user_id: string | null;
         };
         Insert: {
           id?: string;
@@ -86,11 +117,13 @@ export type Database = {
           row_count: number;
           status?: string;
           created_at?: string;
+          owner_user_id?: string | null;
         };
         Update: {
           filename?: string;
           row_count?: number;
           status?: string;
+          owner_user_id?: string | null;
         };
         Relationships: [];
       };
@@ -104,6 +137,7 @@ export type Database = {
           status: string;
           created_at: string;
           updated_at: string;
+          owner_user_id: string | null;
         };
         Insert: {
           id?: string;
@@ -114,6 +148,7 @@ export type Database = {
           status?: string;
           created_at?: string;
           updated_at?: string;
+          owner_user_id?: string | null;
         };
         Update: {
           title?: string;
@@ -122,6 +157,7 @@ export type Database = {
           priority?: string;
           status?: string;
           updated_at?: string;
+          owner_user_id?: string | null;
         };
         Relationships: [];
       };
@@ -134,6 +170,8 @@ export type Database = {
           last_synced_at: string | null;
           created_at: string;
           updated_at: string;
+          owner_user_id: string | null;
+          location_id: string | null;
         };
         Insert: {
           id?: string;
@@ -143,11 +181,48 @@ export type Database = {
           last_synced_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          owner_user_id?: string | null;
+          location_id?: string | null;
         };
         Update: {
           status?: string;
           account_label?: string | null;
           last_synced_at?: string | null;
+          updated_at?: string;
+          owner_user_id?: string | null;
+          location_id?: string | null;
+        };
+        Relationships: [];
+      };
+      competitors: {
+        Row: {
+          id: string;
+          owner_user_id: string;
+          name: string;
+          website: string | null;
+          latest_summary: string | null;
+          latest_sources: { title: string; url: string }[];
+          last_researched_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_user_id: string;
+          name: string;
+          website?: string | null;
+          latest_summary?: string | null;
+          latest_sources?: { title: string; url: string }[];
+          last_researched_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          website?: string | null;
+          latest_summary?: string | null;
+          latest_sources?: { title: string; url: string }[];
+          last_researched_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];

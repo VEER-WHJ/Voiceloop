@@ -1,12 +1,5 @@
-import { cookies } from "next/headers";
-
 import { requestHasAllowedOrigin } from "@/lib/auth/request";
-import {
-  createSessionToken,
-  isValidAccessCode,
-  SESSION_COOKIE_NAME,
-  SESSION_DURATION_SECONDS,
-} from "@/lib/auth/session";
+import { createAuthSupabaseClient } from "@/lib/supabase/auth-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,34 +9,18 @@ export async function POST(request: Request) {
     return Response.json({ message: "Cross-origin sign-in is not allowed." }, { status: 403 });
   }
 
-  let accessCode = "";
   try {
-    const body = (await request.json()) as { accessCode?: unknown };
-    accessCode = typeof body.accessCode === "string" ? body.accessCode.trim() : "";
-  } catch {
-    return Response.json({ message: "Enter the private access code." }, { status: 400 });
-  }
-
-  try {
-    if (!accessCode || !(await isValidAccessCode(accessCode))) {
-      return Response.json({ message: "That access code is not valid." }, { status: 401 });
+    const body = (await request.json()) as { email?: unknown; password?: unknown };
+    const email = typeof body.email === "string" ? body.email.trim() : "";
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!email || password.length < 8) {
+      return Response.json({ message: "Enter your email and password." }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE_NAME, await createSessionToken(), {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: SESSION_DURATION_SECONDS,
-    });
-
-    return Response.json({ ok: true });
-  } catch (error) {
-    console.error("VoiceLoop private access is not configured.", error);
-    return Response.json(
-      { message: "Private access is not configured on this deployment." },
-      { status: 503 },
-    );
+    const { error } = await (await createAuthSupabaseClient()).auth.signInWithPassword({ email, password });
+    if (error) return Response.json({ message: "Email or password is incorrect." }, { status: 401 });
+    return Response.json({ ok: true }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch {
+    return Response.json({ message: "Circuit could not sign you in." }, { status: 500 });
   }
 }

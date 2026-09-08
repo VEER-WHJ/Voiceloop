@@ -25,12 +25,12 @@ export async function analyzeStoredReviews(reviewIds: string[]) {
   try {
     payload = (await response.json()) as AnalysisErrorPayload;
   } catch {
-    throw new AnalysisRequestError("VoiceLoop received an invalid analysis response.");
+    throw new AnalysisRequestError("Circuit received an invalid analysis response.");
   }
 
   if (!response.ok) {
     throw new AnalysisRequestError(
-      payload.message ?? "VoiceLoop could not analyze the uploaded reviews.",
+      payload.message ?? "Circuit could not analyze the uploaded reviews.",
       payload,
     );
   }
@@ -44,7 +44,7 @@ export async function analyzeStoredReviews(reviewIds: string[]) {
     !Array.isArray(payload.errors) ||
     typeof payload.model !== "string"
   ) {
-    throw new AnalysisRequestError("VoiceLoop received an invalid analysis response.");
+    throw new AnalysisRequestError("Circuit received an invalid analysis response.");
   }
 
   return payload as AnalysisApiResult;

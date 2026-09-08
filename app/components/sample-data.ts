@@ -11,7 +11,7 @@ export type Review = {
 };
 
 export const reviews: Review[] = [
-  { id: 1, date: "Aug 21, 2026", source: "Google", rating: 5, sentiment: "Positive", theme: "Food quality", text: "The Secret Stack was juicy, crisp around the edges, and one of the best burgers I’ve had downtown." },
+  { id: 1, date: "Aug 21, 2026", source: "Google", rating: 5, sentiment: "Positive", theme: "Food quality", text: "The burger was juicy, crisp around the edges, and one of the best I’ve had downtown." },
   { id: 2, date: "Aug 21, 2026", source: "DoorDash", rating: 5, sentiment: "Positive", theme: "Food quality", text: "Fries were still hot and crunchy when the order arrived. Everything tasted fresh." },
   { id: 3, date: "Aug 20, 2026", source: "Google", rating: 2, sentiment: "Negative", theme: "Slow service", text: "We waited thirty-five minutes after ordering at Riverside and nobody explained the delay." },
   { id: 4, date: "Aug 20, 2026", source: "Uber Eats", rating: 3, sentiment: "Neutral", theme: "Food temperature", text: "Burger tasted good but arrived lukewarm and the cheese had already firmed up." },
@@ -26,7 +26,7 @@ export const reviews: Review[] = [
   { id: 13, date: "Aug 15, 2026", source: "Google", rating: 2, sentiment: "Negative", theme: "Slow service", text: "Our food sat on the counter for several minutes before someone brought it over." },
   { id: 14, date: "Aug 15, 2026", source: "DoorDash", rating: 5, sentiment: "Positive", theme: "Food quality", text: "Excellent spicy chicken sandwich and the packaging kept everything crisp." },
   { id: 15, date: "Aug 14, 2026", source: "Google", rating: 4, sentiment: "Positive", theme: "Atmosphere", text: "Airport location was clean, quick, and much better than the usual terminal food." },
-  { id: 16, date: "Aug 14, 2026", source: "Yelp", rating: 5, sentiment: "Positive", theme: "Food quality", text: "Perfect crust on the patty, soft bun, and the secret sauce deserves its name." },
+  { id: 16, date: "Aug 14, 2026", source: "Yelp", rating: 5, sentiment: "Positive", theme: "Food quality", text: "Perfect crust on the patty, soft bun, and a well-balanced house sauce." },
   { id: 17, date: "Aug 13, 2026", source: "Google", rating: 2, sentiment: "Negative", theme: "Slow service", text: "We waited too long for our order even though the dining room was only half full." },
   { id: 18, date: "Aug 13, 2026", source: "Uber Eats", rating: 4, sentiment: "Positive", theme: "Food quality", text: "Everything arrived exactly as ordered and the burgers traveled surprisingly well." },
 ];

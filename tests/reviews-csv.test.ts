@@ -24,8 +24,19 @@ test("parses valid reviews and leaves analysis fields null", () => {
     reviewer_name: "Avery",
     sentiment: null,
     theme: null,
+    reviewer_review_count: null,
+    reviewer_is_verified: null,
+    provider_flagged: false,
   });
   assert.equal(rows[1].rating, null);
+});
+
+test("parses optional reviewer-history signals for quality filtering", () => {
+  const [row] = parseReviewsCsv(
+    "review_text,reviewer_review_count,reviewer_is_verified\nGood meal,1,no",
+  );
+  assert.equal(row.reviewer_review_count, 1);
+  assert.equal(row.reviewer_is_verified, false);
 });
 
 test("rejects a CSV without review_text", () => {

@@ -26,6 +26,11 @@ const HEADER_ALIASES: Record<string, string> = {
   channel: "source",
   author: "reviewer_name",
   customer_name: "reviewer_name",
+  author_review_count: "reviewer_review_count",
+  reviewer_total_reviews: "reviewer_review_count",
+  verified_reviewer: "reviewer_is_verified",
+  spam_flag: "provider_flagged",
+  is_spam: "provider_flagged",
 };
 
 function normalizeHeader(header: string) {
@@ -88,6 +93,22 @@ function parseDate(value: string | undefined, rowNumber: number) {
   return { value: trimmed, issue: null };
 }
 
+function parseReviewerCount(value: string | undefined, rowNumber: number) {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return { value: null, issue: null };
+  const count = Number(trimmed);
+  if (!Number.isInteger(count) || count < 0) return { value: null, issue: `Row ${rowNumber}: reviewer_review_count must be a non-negative whole number.` };
+  return { value: count, issue: null };
+}
+
+function parseVerified(value: string | undefined, rowNumber: number) {
+  const trimmed = value?.trim().toLowerCase() ?? "";
+  if (!trimmed) return { value: null, issue: null };
+  if (["true", "yes", "1"].includes(trimmed)) return { value: true, issue: null };
+  if (["false", "no", "0"].includes(trimmed)) return { value: false, issue: null };
+  return { value: null, issue: `Row ${rowNumber}: reviewer_is_verified must be true, false, yes, or no.` };
+}
+
 export function parseReviewsCsv(csvText: string): ReviewInsert[] {
   if (!csvText.trim()) {
     throw new CsvValidationError(["The CSV file is empty."]);
@@ -141,6 +162,9 @@ export function parseReviewsCsv(csvText: string): ReviewInsert[] {
     const reviewDate = parseDate(row.review_date, rowNumber);
     const source = optionalText(row.source);
     const reviewerName = optionalText(row.reviewer_name);
+    const reviewerCount = parseReviewerCount(row.reviewer_review_count, rowNumber);
+    const reviewerVerified = parseVerified(row.reviewer_is_verified, rowNumber);
+    const providerFlagged = parseVerified(row.provider_flagged, rowNumber);
 
     if (row.__parsed_extra?.length) {
       issues.push(`Row ${rowNumber}: too many values for the CSV header.`);
@@ -155,6 +179,9 @@ export function parseReviewsCsv(csvText: string): ReviewInsert[] {
     }
     if (rating.issue) issues.push(rating.issue);
     if (reviewDate.issue) issues.push(reviewDate.issue);
+    if (reviewerCount.issue) issues.push(reviewerCount.issue);
+    if (reviewerVerified.issue) issues.push(reviewerVerified.issue);
+    if (providerFlagged.issue) issues.push(providerFlagged.issue.replace("reviewer_is_verified", "provider_flagged"));
     if (source && source.length > MAX_LABEL_LENGTH) {
       issues.push(`Row ${rowNumber}: source exceeds ${MAX_LABEL_LENGTH} characters.`);
     }
@@ -172,6 +199,9 @@ export function parseReviewsCsv(csvText: string): ReviewInsert[] {
       reviewer_name: reviewerName,
       sentiment: null,
       theme: null,
+      reviewer_review_count: reviewerCount.value,
+      reviewer_is_verified: reviewerVerified.value,
+      provider_flagged: providerFlagged.value ?? false,
     });
   });
 

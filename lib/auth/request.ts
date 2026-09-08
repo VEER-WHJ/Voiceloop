@@ -1,6 +1,4 @@
-import { cookies } from "next/headers";
-
-import { isValidSession, SESSION_COOKIE_NAME } from "./session";
+import { createAuthSupabaseClient } from "@/lib/supabase/auth-server";
 
 export function requestHasAllowedOrigin(request: Request) {
   const origin = request.headers.get("origin");
@@ -14,13 +12,13 @@ export function requestHasAllowedOrigin(request: Request) {
 }
 
 export async function requireSession() {
-  const cookieStore = await cookies();
-  return isValidSession(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+  const { data, error } = await (await createAuthSupabaseClient()).auth.getUser();
+  return error ? null : data.user?.id ?? null;
 }
 
 export function unauthorized() {
   return Response.json(
-    { message: "Your VoiceLoop session has expired. Refresh and sign in again." },
+    { message: "Your Circuit session has expired. Sign in again." },
     { status: 401, headers: { "Cache-Control": "no-store" } },
   );
 }

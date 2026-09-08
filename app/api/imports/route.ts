@@ -4,11 +4,13 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!(await requireSession())) return unauthorized();
+  const userId = await requireSession();
+  if (!userId) return unauthorized();
 
   const { data, error } = await createServerSupabaseClient()
     .from("import_batches")
     .select("*")
+    .eq("owner_user_id", userId)
     .order("created_at", { ascending: false })
     .limit(8);
 

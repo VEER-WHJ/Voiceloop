@@ -2,11 +2,16 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, LockKey, ShieldCheck } from "@phosphor-icons/react";
+import { ArrowRight, EnvelopeSimple, LockKey } from "@phosphor-icons/react";
+
+type Mode = "signup" | "signin";
 
 export function LoginForm() {
   const router = useRouter();
-  const [accessCode, setAccessCode] = useState("");
+  const [mode, setMode] = useState<Mode>("signup");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -14,52 +19,47 @@ export function LoginForm() {
     event.preventDefault();
     setLoading(true);
     setError("");
-
+    setMessage("");
     try {
-      const response = await fetch("/api/auth/login", {
+      const endpoint = mode === "signup" ? "signup" : "login";
+      const response = await fetch(`/api/auth/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessCode }),
+        body: JSON.stringify({ email, password }),
       });
-      const result = (await response.json()) as { message?: string };
-
-      if (!response.ok) throw new Error(result.message ?? "VoiceLoop could not sign you in.");
+      const result = (await response.json()) as { message?: string; confirmationRequired?: boolean };
+      if (!response.ok) throw new Error(result.message ?? "Circuit could not complete the request.");
+      if (mode === "signup" && result.confirmationRequired) {
+        setMessage("Check your email to confirm your account, then sign in.");
+        setMode("signin");
+        setPassword("");
+        return;
+      }
       router.replace("/");
       router.refresh();
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "VoiceLoop could not sign you in.",
-      );
+      setError(submitError instanceof Error ? submitError.message : "Circuit could not complete the request.");
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={submit} className="mt-8 space-y-5">
-      <label className="block">
-        <span className="text-sm font-extrabold text-stone-700">Private access code</span>
-        <div className="relative mt-2">
-          <LockKey className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" size={20} weight="bold" />
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={accessCode}
-            onChange={(event) => setAccessCode(event.target.value)}
-            className="h-13 w-full rounded-xl border-2 border-stone-300 bg-white pl-12 pr-4 font-bold text-stone-950 shadow-[0_3px_0_rgba(41,37,36,0.08)]"
-            placeholder="Enter access code"
-            required
-            autoFocus
-          />
-        </div>
-      </label>
-      {error && <p role="alert" className="rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm font-bold text-red-900">{error}</p>}
-      <button disabled={loading} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#861616] bg-[#c81e1e] px-5 font-extrabold text-white shadow-[0_4px_0_#861616] transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60">
-        {loading ? "Opening workspace…" : "Open Secret Burger workspace"}
-        {!loading && <ArrowRight size={19} weight="bold" />}
-      </button>
-      <p className="flex items-start gap-2 text-xs leading-5 text-stone-500"><ShieldCheck className="mt-0.5 shrink-0 text-emerald-700" size={17} weight="fill" />This private pilot uses an encrypted session cookie. Google Business Profile is not connected.</p>
-    </form>
+    <div className="mt-8">
+      <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Account access">
+        {(["signup", "signin"] as const).map((item) => (
+          <button key={item} type="button" role="tab" aria-selected={mode === item} onClick={() => { setMode(item); setError(""); setMessage(""); }} className={`min-h-10 rounded-lg px-3 text-sm font-semibold transition ${mode === item ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>
+            {item === "signup" ? "Create account" : "Sign in"}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={submit} className="mt-5 space-y-4">
+        <label className="block"><span className="text-sm font-semibold text-slate-700">Email</span><div className="relative mt-2"><EnvelopeSimple className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} weight="bold" /><input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-slate-950 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200" placeholder="you@company.com" required autoFocus /></div></label>
+        <label className="block"><span className="text-sm font-semibold text-slate-700">Password</span><div className="relative mt-2"><LockKey className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} weight="bold" /><input type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-4 text-slate-950 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200" placeholder="At least 8 characters" required /></div></label>
+        {message && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{message}</p>}
+        {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-900">{error}</p>}
+        <button disabled={loading} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-800 px-5 font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-wait disabled:opacity-60">{loading ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}{!loading && <ArrowRight size={18} weight="bold" />}</button>
+      </form>
+    </div>
   );
 }

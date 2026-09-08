@@ -1,5 +1,5 @@
 {
-  "name": "voiceloop",
+  "name": "circuit-feedback",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.112.3",
     "next": "latest",
     "openai": "^7.5.0",
