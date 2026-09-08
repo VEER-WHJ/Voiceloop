@@ -11,10 +11,9 @@ export type Database = {
           reviewer_name: string | null;
           sentiment: string | null;
           theme: string | null;
-          import_batch_id: string | null;
           location_id: string | null;
           external_review_id: string | null;
-          owner_user_id: string | null;
+          owner_user_id: string;
           external_order_id: string | null;
           ordered_items: string[];
           feedback_channel: string | null;
@@ -34,10 +33,9 @@ export type Database = {
           reviewer_name?: string | null;
           sentiment?: string | null;
           theme?: string | null;
-          import_batch_id?: string | null;
           location_id?: string | null;
           external_review_id?: string | null;
-          owner_user_id?: string | null;
+          owner_user_id: string;
           external_order_id?: string | null;
           ordered_items?: string[];
           feedback_channel?: string | null;
@@ -56,10 +54,9 @@ export type Database = {
           reviewer_name?: string | null;
           sentiment?: string | null;
           theme?: string | null;
-          import_batch_id?: string | null;
           location_id?: string | null;
           external_review_id?: string | null;
-          owner_user_id?: string | null;
+          owner_user_id?: string;
           external_order_id?: string | null;
           ordered_items?: string[];
           feedback_channel?: string | null;
@@ -80,7 +77,7 @@ export type Database = {
           sort_order: number;
           created_at: string;
           updated_at: string;
-          owner_user_id: string | null;
+          owner_user_id: string;
         };
         Insert: {
           id?: string;
@@ -90,7 +87,7 @@ export type Database = {
           sort_order?: number;
           created_at?: string;
           updated_at?: string;
-          owner_user_id?: string | null;
+          owner_user_id: string;
         };
         Update: {
           slug?: string;
@@ -98,32 +95,7 @@ export type Database = {
           is_active?: boolean;
           sort_order?: number;
           updated_at?: string;
-          owner_user_id?: string | null;
-        };
-        Relationships: [];
-      };
-      import_batches: {
-        Row: {
-          id: string;
-          filename: string;
-          row_count: number;
-          status: string;
-          created_at: string;
-          owner_user_id: string | null;
-        };
-        Insert: {
-          id?: string;
-          filename: string;
-          row_count: number;
-          status?: string;
-          created_at?: string;
-          owner_user_id?: string | null;
-        };
-        Update: {
-          filename?: string;
-          row_count?: number;
-          status?: string;
-          owner_user_id?: string | null;
+          owner_user_id?: string;
         };
         Relationships: [];
       };
@@ -137,7 +109,7 @@ export type Database = {
           status: string;
           created_at: string;
           updated_at: string;
-          owner_user_id: string | null;
+          owner_user_id: string;
         };
         Insert: {
           id?: string;
@@ -148,7 +120,7 @@ export type Database = {
           status?: string;
           created_at?: string;
           updated_at?: string;
-          owner_user_id?: string | null;
+          owner_user_id: string;
         };
         Update: {
           title?: string;
@@ -157,7 +129,7 @@ export type Database = {
           priority?: string;
           status?: string;
           updated_at?: string;
-          owner_user_id?: string | null;
+          owner_user_id?: string;
         };
         Relationships: [];
       };
@@ -170,7 +142,7 @@ export type Database = {
           last_synced_at: string | null;
           created_at: string;
           updated_at: string;
-          owner_user_id: string | null;
+          owner_user_id: string;
           location_id: string | null;
         };
         Insert: {
@@ -181,7 +153,7 @@ export type Database = {
           last_synced_at?: string | null;
           created_at?: string;
           updated_at?: string;
-          owner_user_id?: string | null;
+          owner_user_id: string;
           location_id?: string | null;
         };
         Update: {
@@ -189,7 +161,7 @@ export type Database = {
           account_label?: string | null;
           last_synced_at?: string | null;
           updated_at?: string;
-          owner_user_id?: string | null;
+          owner_user_id?: string;
           location_id?: string | null;
         };
         Relationships: [];

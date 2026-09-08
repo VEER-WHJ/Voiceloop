@@ -1,7 +1,5 @@
-import type {
-  ReviewInsert,
-  ReviewRecord,
-} from "@/lib/supabase/database.types";
+import type { ReviewRecord } from "@/lib/supabase/database.types";
+import { readApiJson } from "@/lib/http/client";
 
 export const REVIEWS_PAGE_SIZE = 6;
 
@@ -23,25 +21,6 @@ export type ReviewsPage = {
   total: number;
 };
 
-async function readJson<T>(response: Response): Promise<T> {
-  const result = (await response.json()) as T & { message?: string };
-  if (!response.ok) throw new Error(result.message ?? "Circuit could not complete the request.");
-  return result;
-}
-
-export async function insertReviews(
-  rows: ReviewInsert[],
-  options: { filename: string; locationId?: string | null },
-) {
-  return readJson<{ reviews: { id: string }[]; importBatchId: string }>(
-    await fetch("/api/reviews", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows, ...options }),
-    }),
-  );
-}
-
 export async function fetchReviews({
   search,
   source,
@@ -60,11 +39,11 @@ export async function fetchReviews({
     quality,
     locationId,
   });
-  return readJson<ReviewsPage>(await fetch(`/api/reviews?${params}`, { cache: "no-store" }));
+  return readApiJson<ReviewsPage>(await fetch(`/api/reviews?${params}`, { cache: "no-store" }));
 }
 
 export async function fetchReviewSources(locationId = "all") {
-  const result = await readJson<{ sources: string[] }>(
+  const result = await readApiJson<{ sources: string[] }>(
     await fetch(`/api/reviews/sources?locationId=${encodeURIComponent(locationId)}`, { cache: "no-store" }),
   );
   return result.sources;

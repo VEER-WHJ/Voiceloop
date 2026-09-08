@@ -30,7 +30,7 @@ export async function analyzeStoredReviews(reviewIds: string[]) {
 
   if (!response.ok) {
     throw new AnalysisRequestError(
-      payload.message ?? "Circuit could not analyze the uploaded reviews.",
+      payload.message ?? "Circuit could not analyze the selected reviews.",
       payload,
     );
   }

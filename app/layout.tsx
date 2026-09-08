@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Circuit Feedback",
-  description: "One clear view of customer feedback across every location.",
+  description: "Customer feedback management for multi-location businesses.",
   robots: {
     index: false,
     follow: false,

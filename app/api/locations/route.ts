@@ -9,7 +9,7 @@ function slugify(value: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
-    .slice(0, 60);
+    .slice(0, 60) || "location";
 }
 
 export async function GET() {
@@ -32,7 +32,12 @@ export async function POST(request: Request) {
     return Response.json({ message: "Cross-origin changes are not allowed." }, { status: 403 });
   }
 
-  const body = (await request.json()) as { name?: unknown };
+  let body: { name?: unknown };
+  try {
+    body = (await request.json()) as { name?: unknown };
+  } catch {
+    return Response.json({ message: "The request body must be valid JSON." }, { status: 400 });
+  }
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (name.length < 2 || name.length > 80) {
     return Response.json({ message: "Location names must be 2–80 characters." }, { status: 400 });

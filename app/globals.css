@@ -1,12 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --brand-red: #475569;
-  --brand-red-dark: #334155;
-  --brand-cream: #f1f5f9;
-  --brand-ink: #0f172a;
-  --primary: #475569;
-  --primary-dark: #334155;
+  --primary: #0f766e;
+  --primary-dark: #115e59;
   --positive: #047857;
   --positive-bg: #ecfdf5;
   --warning: #b45309;
@@ -32,7 +28,7 @@ body {
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
-::selection { background: #cbd5e1; color: var(--brand-ink); }
+::selection { background: #ccfbf1; color: var(--ink); }
 
 h1,
 h2 {
@@ -46,18 +42,9 @@ select {
 
 input:focus,
 select:focus {
-  outline: 2px solid var(--brand-red);
+  outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
-
-/* Keep the data-heavy screens aligned with the Circuit shell. */
-.text-blue-700,
-.text-blue-800 { color: var(--brand-red-dark); }
-.hover\:text-blue-900:hover { color: var(--brand-red-dark); }
-.bg-blue-700 { background-color: var(--brand-red); }
-.bg-blue-50 { background-color: #eff6ff; }
-.border-blue-600 { border-color: var(--brand-red); }
-.focus\:border-blue-600:focus { border-color: var(--brand-red); }
 
 [class~="rounded-xl"][class~="border-slate-200"][class~="bg-white"] {
   border-width: 2px;
@@ -65,11 +52,6 @@ select:focus {
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
 }
 
-.bg-\[\#f6f1e8\] { background-color: #f1f5f9; }
-.bg-\[\#fffaf1\], .bg-\[\#fff8e7\] { background-color: #ffffff; }
-.text-\[\#b91c1c\], .text-\[\#c81e1e\] { color: #475569; }
-.bg-\[\#c81e1e\] { background-color: #334155; }
-.border-\[\#b91c1c\], .border-\[\#c81e1e\] { border-color: #334155; }
 
 .drawer-enter { animation: drawer-enter 180ms ease-out; }
 .fade-in { animation: fade-in 180ms ease-out; }
