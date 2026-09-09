@@ -1,6 +1,31 @@
 export type Database = {
   public: {
     Tables: {
+      account_profiles: {
+        Row: {
+          owner_user_id: string;
+          company_name: string | null;
+          manager_name: string | null;
+          role_title: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          owner_user_id: string;
+          company_name?: string | null;
+          manager_name?: string | null;
+          role_title?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          company_name?: string | null;
+          manager_name?: string | null;
+          role_title?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       reviews: {
         Row: {
           id: string;

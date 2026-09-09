@@ -34,6 +34,31 @@ export type SourceConnection = {
   location_id: string | null;
 };
 
+export type AccountProfile = {
+  email: string;
+  companyName: string;
+  managerName: string;
+  roleTitle: string;
+};
+
+export async function fetchAccount() {
+  const result = await readApiJson<{ account: AccountProfile }>(
+    await fetch("/api/account", { cache: "no-store" }),
+  );
+  return result.account;
+}
+
+export async function updateAccount(input: Omit<AccountProfile, "email">) {
+  const result = await readApiJson<{ account: AccountProfile }>(
+    await fetch("/api/account", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+  return result.account;
+}
+
 export async function fetchLocations() {
   const result = await readApiJson<{ locations: WorkspaceLocation[] }>(
     await fetch("/api/locations", { cache: "no-store" }),

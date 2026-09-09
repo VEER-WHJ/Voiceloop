@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { type CSSProperties, type FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bell,
   ChartBar,
   CheckCircle,
-  ClipboardText,
-  GearSix,
   GoogleLogo,
   House,
   ListMagnifyingGlass,
@@ -19,6 +17,7 @@ import {
   SignOut,
   Sparkle,
   Storefront,
+  UserCircle,
   UsersThree,
   WarningCircle,
   X,
@@ -35,33 +34,40 @@ import { fetchDashboard, type DashboardData, type DashboardTheme } from "@/lib/d
 import {
   createLocation,
   createCompetitor,
-  createManagerAction,
+  fetchAccount,
   fetchCompetitors,
   fetchLocations,
-  fetchManagerActions,
   fetchSourceConnections,
   runCompetitorResearch,
+  updateAccount,
   updateLocation,
-  updateManagerAction,
-  type ManagerAction,
+  type AccountProfile,
   type Competitor,
   type WorkspaceLocation,
 } from "@/lib/workspace/repository";
 
-type View = "dashboard" | "reviews" | "sources" | "digest" | "competitors" | "locations" | "settings";
-type LocationSelection = { id: string; name: string };
+type View = "dashboard" | "reviews" | "sources" | "digest" | "competitors" | "locations" | "account";
+type LocationSelection = { id: string; name: string; themeIndex: number };
 
 const navItems: { id: View; label: string; icon: typeof House }[] = [
   { id: "dashboard", label: "Overview", icon: House },
   { id: "reviews", label: "Reviews", icon: ListMagnifyingGlass },
-  { id: "sources", label: "Sources", icon: PlugsConnected },
   { id: "digest", label: "AI digest", icon: Sparkle },
   { id: "competitors", label: "Competitors", icon: UsersThree },
-  { id: "settings", label: "Settings", icon: GearSix },
 ];
 const locationAwareViews: View[] = ["dashboard", "reviews", "sources", "digest"];
 
-const buttonPrimary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-teal-700 bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:border-teal-600 hover:bg-teal-600 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300";
+const pageLabels: Record<View, string> = {
+  dashboard: "Overview",
+  reviews: "Reviews",
+  sources: "Sources",
+  digest: "AI digest",
+  competitors: "Competitors",
+  locations: "Locations",
+  account: "Account",
+};
+
+const buttonPrimary = "location-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300";
 const buttonSecondary = "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
 const panelClass = "rounded-[18px] border border-slate-200 bg-white shadow-sm";
 
@@ -75,10 +81,20 @@ function providerIsConnected(connectedProviders: string[], provider: string) {
   return aliases.some((alias) => connectedProviders.includes(alias));
 }
 
+function getLocationTheme(themeIndex: number) {
+  const hue = themeIndex === 0 ? 158 : Math.min(222, 176 + (themeIndex - 1) * 12);
+  return {
+    accent: `hsl(${hue} 68% 34%)`,
+    dark: `hsl(${hue} 66% 24%)`,
+    soft: `hsl(${hue} 62% 95%)`,
+    glow: `hsl(${hue} 70% 45% / 0.24)`,
+  };
+}
+
 export function CircuitApp() {
   const [view, setView] = useState<View>("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [location, setLocation] = useState<LocationSelection>({ id: "all", name: "All locations" });
+  const [location, setLocation] = useState<LocationSelection>({ id: "all", name: "All locations", themeIndex: 0 });
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -96,8 +112,16 @@ export function CircuitApp() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const theme = getLocationTheme(location.themeIndex);
+  const workspaceStyle = {
+    "--location-accent": theme.accent,
+    "--location-accent-dark": theme.dark,
+    "--location-accent-soft": theme.soft,
+    "--location-glow": theme.glow,
+  } as CSSProperties;
+
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950">
+    <div className="circuit-workspace min-h-screen text-slate-950" style={workspaceStyle}>
       <a href="#main-content" className="fixed left-3 top-3 z-[90] -translate-y-24 rounded-lg bg-stone-950 px-4 py-3 font-bold text-white focus:translate-y-0">Skip to main content</a>
       <Sidebar view={view} open={menuOpen} onClose={() => setMenuOpen(false)} onNavigate={navigate} />
       <MobileHeader
@@ -113,7 +137,7 @@ export function CircuitApp() {
         {view === "digest" && <AIDigest key={location.id} location={location} />}
         {view === "competitors" && <CompetitorsScreen />}
         {view === "locations" && <LocationsScreen />}
-        {view === "settings" && <SettingsScreen />}
+        {view === "account" && <AccountScreen />}
         </div>
       </main>
     </div>
@@ -128,20 +152,12 @@ function CircuitMark({ onHome, compact = false }: { onHome: () => void; compact?
       onClick={onHome}
       aria-label="Go to the Circuit overview"
     >
-      <p className={`${compact ? "text-[19px]" : "text-[22px]"} tracking-[-0.035em] text-slate-950`}><span className="font-bold text-teal-800">Circuit</span><span className="ml-1.5 font-medium text-slate-600">Feedback</span></p>
+      <p className={`${compact ? "text-[19px]" : "text-[22px]"} tracking-[-0.035em] text-slate-950`}><span className="location-accent-text font-bold">Circuit</span><span className="ml-1.5 font-medium text-slate-600">Feedback</span></p>
     </button>
   );
 }
 
 function Sidebar({ view, open, onClose, onNavigate }: { view: View; open: boolean; onClose: () => void; onNavigate: (view: View) => void }) {
-  const router = useRouter();
-
-  const signOut = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
-    router.refresh();
-  };
-
   return (
     <>
       {open && <button aria-label="Close navigation" className="fixed inset-0 z-50 bg-stone-950/35 lg:hidden" onClick={onClose} />}
@@ -149,12 +165,10 @@ function Sidebar({ view, open, onClose, onNavigate }: { view: View; open: boolea
         <div className="flex items-start justify-between px-3"><CircuitMark onHome={() => onNavigate("dashboard")} /><button className="grid h-11 w-11 place-items-center rounded-lg text-stone-600 hover:bg-stone-100 lg:hidden" onClick={onClose} aria-label="Close menu"><X size={20} weight="bold" /></button></div>
         <nav id="main-menu" aria-label="Circuit workspace" className="mt-10 space-y-1.5">
           {navItems.map((item) => { const Icon = item.icon; return (
-            <button key={item.id} onClick={() => onNavigate(item.id)} aria-current={view === item.id ? "page" : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm font-semibold transition ${view === item.id ? "bg-teal-700 text-white shadow-sm" : "text-slate-600 hover:bg-teal-50 hover:text-teal-900"}`}><Icon size={19} weight={view === item.id ? "fill" : "bold"} />{item.label}</button>
+            <button key={item.id} onClick={() => onNavigate(item.id)} aria-current={view === item.id ? "page" : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3.5 text-left text-sm font-semibold transition ${view === item.id ? "location-nav-active" : "location-nav-idle text-slate-600"}`}><Icon size={19} weight={view === item.id ? "fill" : "bold"} />{item.label}</button>
           ); })}
         </nav>
-        <div className="mt-auto rounded-xl border-2 border-stone-300 bg-white p-3.5 shadow-[0_3px_0_rgba(41,37,36,0.07)]">
-          <div className="flex items-center gap-3"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-900 text-xs font-black text-white">CF</div><div className="min-w-0"><p className="truncate text-sm font-extrabold">Private workspace</p><p className="truncate text-xs text-stone-500">Customer feedback</p></div><button type="button" onClick={() => void signOut()} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-950" aria-label="Sign out"><SignOut size={18} weight="bold" /></button></div>
-        </div>
+        <button type="button" onClick={() => onNavigate("account")} aria-current={view === "account" ? "page" : undefined} className={`mt-auto flex w-full items-center gap-3 rounded-xl border-2 bg-white p-3.5 text-left shadow-[0_3px_0_rgba(41,37,36,0.07)] transition ${view === "account" ? "location-account-active" : "border-stone-300 hover:border-slate-400 hover:bg-slate-50"}`}><div className="location-account-icon grid h-9 w-9 shrink-0 place-items-center rounded-full"><UserCircle size={21} weight="fill" /></div><div className="min-w-0"><p className="truncate text-sm font-bold">Account</p><p className="truncate text-xs text-stone-500">Company & profile</p></div><ArrowRight className="ml-auto text-slate-400" size={17} weight="bold" /></button>
       </aside>
     </>
   );
@@ -165,7 +179,7 @@ function MobileHeader({ onHome, onToggle }: { onHome: () => void; onToggle: () =
 }
 
 function WorkspaceHeader({ view, location, onLocationChange, onNavigate }: { view: View; location: LocationSelection; onLocationChange: (location: LocationSelection) => void; onNavigate: (view: View) => void }) {
-  const pageTitle = navItems.find((item) => item.id === view)?.label ?? "Overview";
+  const pageTitle = pageLabels[view];
   const [workspaceLocations, setWorkspaceLocations] = useState<WorkspaceLocation[]>([]);
 
   useEffect(() => {
@@ -177,7 +191,7 @@ function WorkspaceHeader({ view, location, onLocationChange, onNavigate }: { vie
         const visibleLocations = locations.filter((item) => item.is_active);
         setWorkspaceLocations(visibleLocations);
         if (location.id !== "all" && !visibleLocations.some((item) => item.id === location.id)) {
-          onLocationChange({ id: "all", name: "All locations" });
+          onLocationChange({ id: "all", name: "All locations", themeIndex: 0 });
         }
       })
       .catch(() => {
@@ -187,16 +201,16 @@ function WorkspaceHeader({ view, location, onLocationChange, onNavigate }: { vie
   }, [location.id, onLocationChange, view]);
 
   const options = [
-    { id: "all", name: "All locations" },
-    ...workspaceLocations.map(({ id, name }) => ({ id, name })),
+    { id: "all", name: "All locations", themeIndex: 0 },
+    ...workspaceLocations.map(({ id, name }, index) => ({ id, name, themeIndex: index + 1 })),
   ];
   return (
     <header className="mb-8">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div><p className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">{pageTitle}</p><h1 className="mt-1 text-[2rem] font-bold tracking-[-0.04em] text-slate-950 sm:text-[2.7rem]">Customer feedback</h1></div>
+        <div><p className="location-accent-text text-sm font-semibold uppercase tracking-[0.12em]">{pageTitle}</p><h1 className="mt-1 text-[2rem] font-bold tracking-[-0.04em] text-slate-950 sm:text-[2.7rem]">Customer Feedback{location.id === "all" || !locationAwareViews.includes(view) ? "" : ` - ${location.name}`}</h1></div>
         <div className="flex items-center gap-2"><NotificationBell view={view} onNavigate={onNavigate} /><button className={buttonPrimary} onClick={() => onNavigate("sources")}><PlugsConnected size={18} weight="bold" />Connect source</button></div>
       </div>
-      {locationAwareViews.includes(view) && <label className="mt-7 block max-w-sm"><span className="mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Location</span><select aria-label="Choose a location" value={location.id} onChange={(event) => { if (event.target.value === "__add__") { onNavigate("locations"); return; } const selected = options.find((item) => item.id === event.target.value); if (selected) onLocationChange(selected); }} className="h-12 w-full rounded-xl border-2 border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100">{options.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}<option value="__add__">+ Add location</option></select></label>}
+      {locationAwareViews.includes(view) && <div className="mt-7"><p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Locations</p><div className="location-tabs -mx-1 flex gap-2 overflow-x-auto p-1 pb-2" role="group" aria-label="Choose a location">{options.map((item) => <button key={item.id} type="button" aria-pressed={location.id === item.id} onClick={() => onLocationChange(item)} className={`min-h-11 shrink-0 rounded-xl border-2 px-4 text-sm font-semibold transition ${location.id === item.id ? "location-tab-selected" : "location-tab-idle"}`}>{item.name}</button>)}<button type="button" onClick={() => onNavigate("locations")} className="location-tab-add grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2" aria-label="Add a location"><Plus size={19} weight="bold" /></button></div></div>}
     </header>
   );
 }
@@ -225,14 +239,14 @@ function NotificationBell({ view, onNavigate }: { view: View; onNavigate: (view:
     return () => { active = false; };
   }, [view]);
 
-  return <div className="relative"><button type="button" onClick={() => setOpen((value) => !value)} className="relative grid h-11 w-11 place-items-center rounded-xl border-2 border-slate-300 bg-white text-teal-800 shadow-sm hover:bg-teal-50" aria-label={`${notifications.length} notifications`} aria-expanded={open}><Bell size={20} weight="bold" />{notifications.length > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">{notifications.length}</span>}</button>{open && <div className="absolute right-0 top-14 z-30 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border-2 border-slate-200 bg-white shadow-xl"><div className="border-b border-slate-200 px-4 py-3"><p className="font-semibold">Notifications</p></div>{notifications.length ? notifications.map((item) => <button key={item.title} type="button" onClick={() => { setOpen(false); onNavigate(item.view); }} className="block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-teal-50"><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.copy}</p></button>) : <p className="px-4 py-5 text-sm text-slate-500">You’re all caught up.</p>}</div>}</div>;
+  return <div className="relative"><button type="button" onClick={() => setOpen((value) => !value)} className="location-accent-text location-notification relative grid h-11 w-11 place-items-center rounded-xl border-2 border-slate-300 bg-white shadow-sm" aria-label={`${notifications.length} notifications`} aria-expanded={open}><Bell size={20} weight="bold" />{notifications.length > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">{notifications.length}</span>}</button>{open && <div className="absolute right-0 top-14 z-30 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border-2 border-slate-200 bg-white shadow-xl"><div className="border-b border-slate-200 px-4 py-3"><p className="font-semibold">Notifications</p></div>{notifications.length ? notifications.map((item) => <button key={item.title} type="button" onClick={() => { setOpen(false); onNavigate(item.view); }} className="block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-slate-50"><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.copy}</p></button>) : <p className="px-4 py-5 text-sm text-slate-500">You’re all caught up.</p>}</div>}</div>;
 }
 
 function PageHeading({ eyebrow, title, copy, action }: { eyebrow: string; title: string; copy: string; action?: React.ReactNode }) {
   return (
     <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-teal-700">{eyebrow}</p>
+        <p className="location-accent-text text-xs font-bold uppercase tracking-[0.14em]">{eyebrow}</p>
         <h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-stone-950 sm:text-[2.5rem]">{title}</h1>
         <p className="mt-2 text-base leading-7 text-stone-600 sm:text-lg">{copy}</p>
       </div>
@@ -262,86 +276,17 @@ function GuidedStart({ onNavigate }: { onNavigate: (view: View) => void }) {
   };
 
   const steps: Array<{ number: string; title: string; copy: string; view: View; tone: string }> = [
-    { number: "1", title: "Add locations", copy: "Create the stores you want to monitor.", view: "locations", tone: "bg-teal-700" },
+    { number: "1", title: "Add locations", copy: "Create the stores you want to monitor.", view: "locations", tone: "location-accent-background" },
     { number: "2", title: "Connect sources", copy: "Authorize the accounts that collect feedback.", view: "sources", tone: "bg-sky-600" },
     { number: "3", title: "Explore reviews", copy: "Search feedback after connections begin syncing.", view: "reviews", tone: "bg-amber-500" },
   ];
 
   return (
     <section className={`${panelClass} overflow-hidden bg-white`} aria-label="Circuit quick start">
-      <div className="flex items-start justify-between gap-4 border-b-2 border-slate-200 px-5 py-4 sm:px-7"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Getting started</p><h2 className="mt-1 text-2xl font-bold">Workspace setup</h2></div><button type="button" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={dismiss} aria-label="Dismiss setup guide"><X size={20} weight="bold" /></button></div>
+      <div className="flex items-start justify-between gap-4 border-b-2 border-slate-200 px-5 py-4 sm:px-7"><div><p className="location-accent-text text-xs font-semibold uppercase tracking-[0.14em]">Getting started</p><h2 className="mt-1 text-2xl font-bold">Workspace setup</h2></div><button type="button" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={dismiss} aria-label="Dismiss setup guide"><X size={20} weight="bold" /></button></div>
       <div className="grid divide-y-2 divide-slate-200 md:grid-cols-3 md:divide-x-2 md:divide-y-0">
         {steps.map((step) => <button key={step.number} className="group p-5 text-left hover:bg-slate-50 sm:p-6" onClick={() => onNavigate(step.view)}><span className={`grid h-8 w-8 place-items-center rounded-full text-sm font-bold text-white ${step.tone}`}>{step.number}</span><h3 className="mt-4 font-bold group-hover:text-teal-700">{step.title}</h3><p className="mt-1 text-sm leading-6 text-slate-600">{step.copy}</p></button>)}
       </div>
-    </section>
-  );
-}
-
-function ManagerActionQueue({ location }: { location: LocationSelection }) {
-  const [actions, setActions] = useState<ManagerAction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [title, setTitle] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchManagerActions()
-      .then((items) => {
-        if (!cancelled) {
-          setActions(items);
-          setError("");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setError("Manager actions are temporarily unavailable.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const changeStatus = async (action: ManagerAction, status: ManagerAction["status"]) => {
-    setSaving(true);
-    try {
-      const updated = await updateManagerAction(action.id, { status });
-      setActions((current) => current.map((item) => item.id === updated.id ? updated : item));
-      setError("");
-    } catch {
-      setError("Circuit could not update that action.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addAction = async () => {
-    if (!title.trim()) return;
-    setSaving(true);
-    try {
-      const action = await createManagerAction({
-        title,
-        locationName: location.id === "all" ? undefined : location.name,
-        priority: "normal",
-      });
-      setActions((current) => [action, ...current]);
-      setTitle("");
-      setAdding(false);
-      setError("");
-    } catch (addError) {
-      setError(addError instanceof Error ? addError.message : "Circuit could not add that action.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <section className={`${panelClass} mt-6 overflow-hidden`}>
-      <div className="flex items-center justify-between gap-4 border-b-2 border-slate-200 p-5 sm:p-7"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Manager actions</p><h2 className="mt-1 text-2xl font-bold tracking-[-0.025em]">Action list</h2></div><button type="button" className={buttonSecondary} onClick={() => setAdding((value) => !value)}><Plus size={17} weight="bold" />Add action</button></div>
-      {adding && <div className="flex flex-col gap-3 border-b-2 border-slate-200 bg-slate-50 p-5 sm:flex-row sm:px-7"><label className="flex-1"><span className="sr-only">Action title</span><input value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void addAction(); }} maxLength={160} placeholder="What needs to be done?" className="h-11 w-full rounded-lg border-2 border-slate-300 bg-white px-4 text-sm outline-none focus:border-teal-600" /></label><button type="button" className={buttonPrimary} disabled={saving || !title.trim()} onClick={() => void addAction()}>{saving ? "Adding…" : "Save action"}</button><button type="button" className={buttonSecondary} onClick={() => { setAdding(false); setTitle(""); }}>Cancel</button></div>}
-      {error && <p role="alert" className="border-b border-rose-200 bg-rose-50 px-6 py-3 text-sm font-semibold text-rose-900">{error}</p>}
-      {loading ? <p className="p-7 text-sm text-slate-500">Loading manager actions…</p> : actions.length ? <div className="divide-y divide-slate-200">{actions.map((action) => <article key={action.id} className="grid gap-4 bg-white p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:px-7"><div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] ${action.priority === "high" ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-600"}`}>{action.priority}</span>{action.location_name && <span className="text-xs font-semibold text-slate-500">{action.location_name}</span>}</div><h3 className="mt-2 font-bold">{action.title}</h3>{action.description && <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{action.description}</p>}</div><select aria-label={`Status for ${action.title}`} value={action.status} disabled={saving} onChange={(event) => void changeStatus(action, event.target.value as ManagerAction["status"])} className="h-11 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-semibold capitalize"><option value="open">Open</option><option value="monitoring">Monitoring</option><option value="resolved">Resolved</option></select></article>)}</div> : <div className="p-7 text-center"><ClipboardText className="mx-auto text-slate-400" size={34} weight="bold" /><h3 className="mt-3 text-lg font-bold">No manager actions</h3><p className="mt-1 text-sm text-slate-500">Add an action when feedback identifies work for the team.</p></div>}
     </section>
   );
 }
@@ -387,18 +332,17 @@ function Dashboard({ location, onNavigate }: { location: LocationSelection; onNa
       </section>
 
       <section className={`${panelClass} mt-6 overflow-hidden`}>
-        <div className="flex flex-col gap-4 border-b-2 border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">Performance</p><h2 className="mt-1 text-2xl font-bold tracking-[-0.025em] sm:text-3xl">{selected}</h2><p className="mt-1 text-sm text-slate-500">{data.metrics.reviewCount} reviews across {data.metrics.sourceCount} connected {data.metrics.sourceCount === 1 ? "source" : "sources"}</p></div><button className={buttonSecondary} onClick={() => onNavigate("reviews")}>View reviews <ArrowRight size={17} weight="bold" /></button></div>
+        <div className="flex flex-col gap-4 border-b-2 border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7"><div><p className="location-accent-text text-xs font-semibold uppercase tracking-[0.14em]">Performance</p><h2 className="mt-1 text-2xl font-bold tracking-[-0.025em] sm:text-3xl">{selected}</h2><p className="mt-1 text-sm text-slate-500">{data.metrics.reviewCount} reviews from {data.metrics.sourceCount} {data.metrics.sourceCount === 1 ? "source" : "sources"}</p></div><button className={buttonSecondary} onClick={() => onNavigate("reviews")}>View reviews <ArrowRight size={17} weight="bold" /></button></div>
         <div className="grid grid-cols-2 divide-x-2 divide-y-2 divide-slate-200 md:grid-cols-4 md:divide-y-0">
           <MetricCard label="Average rating" value={data.metrics.averageRating === null ? "—" : data.metrics.averageRating.toFixed(1)} detail={data.metrics.averageRating === null ? "No rated reviews" : `${data.metrics.reviewCount} total reviews`} />
           <MetricCard label="Positive sentiment" value={data.metrics.positivePercent === null ? "—" : `${data.metrics.positivePercent}%`} detail={data.metrics.positivePercent === null ? "No analyzed reviews" : `${data.metrics.analyzedCount} analyzed`} tone="positive" />
           <MetricCard label="Negative reviews" value={String(data.metrics.negativeCount)} detail="Excludes provider-flagged spam" tone={data.metrics.negativeCount ? "warning" : undefined} />
-          <MetricCard label="Open actions" value={String(data.metrics.openActionCount)} detail="Across this workspace" />
+          <MetricCard label="Analyzed reviews" value={String(data.metrics.analyzedCount)} detail={data.metrics.reviewCount ? `${Math.round((data.metrics.analyzedCount / data.metrics.reviewCount) * 100)}% of feedback` : "No feedback yet"} />
         </div>
-        <div className="overflow-x-auto border-t-2 border-slate-200"><table className="w-full min-w-[620px] text-left"><thead className="bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-6 py-4">Location</th><th className="px-6 py-4">Rating</th><th className="px-6 py-4">Reviews</th><th className="px-6 py-4">Top issue</th></tr></thead><tbody className="divide-y divide-slate-200">{data.locations.map((row) => <tr key={row.id} className="bg-white hover:bg-teal-50/40"><td className="px-6 py-4 font-semibold"><span className="inline-flex items-center gap-2"><MapPin size={17} weight="fill" className="text-teal-600" />{row.name}</span></td><td className="px-6 py-4 font-bold">{row.score === null ? "—" : row.score.toFixed(1)}</td><td className="px-6 py-4 text-slate-600">{row.reviews}</td><td className="px-6 py-4 text-slate-600">{row.issue ?? "No recurring issue"}</td></tr>)}{data.locations.length === 0 && <tr><td colSpan={4} className="bg-white px-6 py-8 text-center text-sm text-slate-500">Add a location to begin.</td></tr>}</tbody></table></div>
+        <div className="overflow-x-auto border-t-2 border-slate-200"><table className="w-full min-w-[620px] text-left"><thead className="bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-6 py-4">Location</th><th className="px-6 py-4">Rating</th><th className="px-6 py-4">Reviews</th><th className="px-6 py-4">Top issue</th></tr></thead><tbody className="divide-y divide-slate-200">{data.locations.map((row) => <tr key={row.id} className="location-notification bg-white"><td className="px-6 py-4 font-semibold"><span className="inline-flex items-center gap-2"><MapPin size={17} weight="fill" className="location-accent-text" />{row.name}</span></td><td className="px-6 py-4 font-bold">{row.score === null ? "—" : row.score.toFixed(1)}</td><td className="px-6 py-4 text-slate-600">{row.reviews}</td><td className="px-6 py-4 text-slate-600">{row.issue ?? "No recurring issue"}</td></tr>)}{data.locations.length === 0 && <tr><td colSpan={4} className="bg-white px-6 py-8 text-center text-sm text-slate-500">Add a location to begin.</td></tr>}</tbody></table></div>
         <div className="flex justify-end border-t-2 border-slate-200 bg-slate-50 px-5 py-4"><button className={buttonSecondary} onClick={() => onNavigate("locations")}>Manage locations <ArrowRight size={17} weight="bold" /></button></div>
       </section>
 
-      <ManagerActionQueue location={location} />
       <SourceFreshness location={location} onNavigate={onNavigate} />
     </div>
   );
@@ -510,11 +454,81 @@ function CompetitorsScreen() {
   </div>;
 }
 
-function SettingsScreen() {
-  return <div className="fade-in"><PageHeading eyebrow="Workspace settings" title="Circuit settings" copy="Manage the locations and data protections for this account." />
-    <div className="grid gap-6 lg:grid-cols-2">
-      <LocationManager />
-      <section className={`${panelClass} p-6 sm:p-7`}><div className="flex items-start gap-4"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><ShieldCheck size={23} weight="fill" /></div><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Data</p><h2 className="mt-1 text-2xl font-bold">Security</h2></div></div><ul className="mt-6 space-y-4 text-sm leading-6 text-stone-600"><li><strong className="text-stone-950">Account isolation:</strong> each manager sees only their workspace data.</li><li><strong className="text-stone-950">Protected reviews:</strong> anonymous database read and write access is disabled.</li><li><strong className="text-stone-950">Server-side AI:</strong> the OpenAI key is never sent to the browser.</li><li><strong className="text-stone-950">Provider consent:</strong> source synchronization remains inactive until the account owner grants access.</li><li><strong className="text-stone-950">Connected data:</strong> feedback stays linked to its source and location.</li></ul></section>
+function AccountScreen() {
+  const router = useRouter();
+  const [account, setAccount] = useState<AccountProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void fetchAccount()
+      .then((profile) => {
+        if (active) {
+          setAccount(profile);
+          setError("");
+        }
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Account details could not be loaded.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!account) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      const updated = await updateAccount({
+        companyName: account.companyName,
+        managerName: account.managerName,
+        roleTitle: account.roleTitle,
+      });
+      setAccount(updated);
+      setError("");
+      setSaved(true);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Account details could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const signOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  };
+
+  const updateField = (field: "companyName" | "managerName" | "roleTitle", value: string) => {
+    setAccount((current) => current ? { ...current, [field]: value } : current);
+    setSaved(false);
+  };
+
+  return <div className="fade-in"><PageHeading eyebrow="Account" title="Company and profile" copy="Set the details used to identify this workspace and manage your sign-in." />
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
+      <section className={`${panelClass} overflow-hidden`}>
+        <div className="border-b-2 border-slate-200 p-6 sm:p-7"><h2 className="text-2xl font-bold">Workspace details</h2><p className="mt-1 text-sm leading-6 text-slate-600">These labels are private to your Circuit account.</p></div>
+        {loading ? <p className="p-7 text-sm text-slate-500">Loading account…</p> : account ? <form className="space-y-5 p-6 sm:p-7" onSubmit={save}>
+          <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Company name</span><input value={account.companyName} onChange={(event) => updateField("companyName", event.target.value)} maxLength={120} autoComplete="organization" placeholder="Your company" className="h-12 w-full rounded-xl border-2 border-slate-300 bg-white px-4 text-sm outline-none" /></label>
+          <div className="grid gap-5 sm:grid-cols-2"><label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Your name</span><input value={account.managerName} onChange={(event) => updateField("managerName", event.target.value)} maxLength={120} autoComplete="name" placeholder="Manager name" className="h-12 w-full rounded-xl border-2 border-slate-300 bg-white px-4 text-sm outline-none" /></label><label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Role</span><input value={account.roleTitle} onChange={(event) => updateField("roleTitle", event.target.value)} maxLength={120} autoComplete="organization-title" placeholder="Owner, manager…" className="h-12 w-full rounded-xl border-2 border-slate-300 bg-white px-4 text-sm outline-none" /></label></div>
+          <label className="block"><span className="mb-2 block text-sm font-semibold text-slate-700">Email</span><input value={account.email} readOnly className="h-12 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 text-sm text-slate-500" /></label>
+          {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-800">{error}</p>}
+          {saved && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Account details saved.</p>}
+          <button type="submit" className={buttonPrimary} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+        </form> : <div className="p-7"><p role="alert" className="text-sm font-semibold text-rose-800">{error || "Account details are unavailable."}</p></div>}
+      </section>
+      <div className="space-y-6">
+        <section className={`${panelClass} p-6 sm:p-7`}><div className="location-account-icon grid h-11 w-11 place-items-center rounded-xl"><ShieldCheck size={23} weight="fill" /></div><h2 className="mt-4 text-xl font-bold">Protected workspace</h2><p className="mt-2 text-sm leading-6 text-slate-600">Your reviews, locations, connections, and AI results are isolated to this account.</p></section>
+        <section className={`${panelClass} p-6 sm:p-7`}><h2 className="text-xl font-bold">Session</h2><p className="mt-2 text-sm leading-6 text-slate-600">Sign out when you are finished on a shared device.</p><button type="button" onClick={() => void signOut()} className={`${buttonSecondary} mt-5 w-full`}><SignOut size={18} weight="bold" />Sign out</button></section>
+      </div>
     </div>
   </div>;
 }

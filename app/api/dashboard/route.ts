@@ -22,12 +22,14 @@ export async function GET(request: Request) {
 
   const locationId = new URL(request.url).searchParams.get("locationId") ?? "all";
   const supabase = createServerSupabaseClient();
-  const [locationsResult, actionsResult] = await Promise.all([
-    supabase.from("locations").select("id,name,is_active").eq("owner_user_id", userId).order("sort_order").order("name"),
-    supabase.from("manager_actions").select("id").eq("owner_user_id", userId).neq("status", "resolved"),
-  ]);
+  const locationsResult = await supabase
+    .from("locations")
+    .select("id,name,is_active")
+    .eq("owner_user_id", userId)
+    .order("sort_order")
+    .order("name");
 
-  if (locationsResult.error || actionsResult.error) {
+  if (locationsResult.error) {
     return Response.json({ message: "Overview data could not be loaded." }, { status: 502 });
   }
 
@@ -74,7 +76,6 @@ export async function GET(request: Request) {
       positivePercent: analyzed.length ? Math.round((positiveCount / analyzed.length) * 100) : null,
       negativeCount: negativeReviews.length,
       sourceCount: new Set(reviews.map((review) => review.source).filter(Boolean)).size,
-      openActionCount: actionsResult.data.length,
     },
     topIssue,
     evidence,

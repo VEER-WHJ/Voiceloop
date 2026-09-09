@@ -8,7 +8,6 @@ export type DashboardData = {
     positivePercent: number | null;
     negativeCount: number;
     sourceCount: number;
-    openActionCount: number;
   };
   topIssue: DashboardTheme | null;
   evidence: Array<{

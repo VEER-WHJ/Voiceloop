@@ -11,6 +11,10 @@
   --ink: #0f172a;
   --muted: #64748b;
   --border: #cbd5e1;
+  --location-accent: hsl(158 68% 34%);
+  --location-accent-dark: hsl(158 66% 24%);
+  --location-accent-soft: hsl(158 62% 95%);
+  --location-glow: hsl(158 70% 45% / 0.24);
 }
 
 * { box-sizing: border-box; }
@@ -27,7 +31,7 @@ body {
 }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
-:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--location-accent); outline-offset: 3px; }
 ::selection { background: #ccfbf1; color: var(--ink); }
 
 h1,
@@ -42,8 +46,79 @@ select {
 
 input:focus,
 select:focus {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--location-accent);
   outline-offset: 1px;
+}
+
+.circuit-workspace {
+  background:
+    linear-gradient(145deg, var(--location-accent-soft) 0, #f1f5f9 24rem),
+    #f1f5f9;
+  transition: background 220ms ease;
+}
+
+.location-primary {
+  border-color: var(--location-accent-dark);
+  background: var(--location-accent);
+}
+
+.location-primary:hover:not(:disabled) {
+  border-color: var(--location-accent);
+  filter: brightness(1.06);
+}
+
+.location-accent-text { color: var(--location-accent-dark); }
+.location-accent-background { background: var(--location-accent); }
+.location-accent-soft { background: var(--location-accent-soft); }
+
+.location-notification:hover { background: var(--location-accent-soft); }
+
+.location-nav-active {
+  background: var(--location-accent);
+  color: white;
+  box-shadow: 0 6px 14px var(--location-glow);
+}
+
+.location-nav-idle:hover {
+  background: var(--location-accent-soft);
+  color: var(--location-accent-dark);
+}
+
+.location-tab-selected {
+  border-color: var(--location-accent);
+  background: var(--location-accent-soft);
+  color: var(--location-accent-dark);
+  box-shadow: 0 0 0 3px var(--location-glow), 0 5px 12px rgba(15, 23, 42, 0.08);
+}
+
+.location-tab-idle,
+.location-tab-add {
+  border-color: #cbd5e1;
+  background: white;
+  color: #475569;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.05);
+}
+
+.location-tab-idle:hover,
+.location-tab-add:hover {
+  border-color: var(--location-accent);
+  color: var(--location-accent-dark);
+  background: var(--location-accent-soft);
+}
+
+.location-account-active {
+  border-color: var(--location-accent);
+  box-shadow: 0 0 0 3px var(--location-glow), 0 3px 10px rgba(15, 23, 42, 0.07);
+}
+
+.location-account-icon {
+  background: var(--location-accent-soft);
+  color: var(--location-accent-dark);
+}
+
+.location-tabs {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 [class~="rounded-xl"][class~="border-slate-200"][class~="bg-white"] {
